@@ -31,7 +31,8 @@
         // Cleanup options
         cleanupOnSave: true,    // Clean up DOM elements after successful save
         cleanupOnCancel: true,  // Clean up DOM elements after cancel
-        cleanupOnHide: false    // Clean up container on hide (careful with this one)
+        cleanupOnHide: false,    // Clean up container on hide (careful with this one)
+        removeContainerOnCleanup: true,  // Whether to completely remove container from DOM on cleanup
     };
     
     /**
@@ -170,6 +171,13 @@
             if (this.form && typeof this.form.render === 'function') {
                 this.form.render();
             }
+
+            // Reset focus after form is rendered
+            setTimeout(() => {
+                if (this.input && typeof this.input.activate === 'function') {
+                    this.input.activate();
+                }
+            }, 10);
         }
 
         _createInput() {
@@ -218,6 +226,9 @@
         hide() {
             if (!this.element) return;
 
+            // Log that we're hiding
+            console.log(`Hiding editable at ${getCurrentTimestamp()} by ${CURRENT_USER}`);
+
             // Remove open class
             this.element.classList.remove('editable-open');
 
@@ -229,51 +240,50 @@
             // Hide container
             if (this.container) {
                 this.container.hide();
+
+                // CRITICAL ADDITION: Always remove container from DOM after hiding
+                if (this.container.removeFromDOM) {
+                    this.container.removeFromDOM();
+                }
+                this.container = null;
             }
+
+            // Perform full cleanup
+            this.softCleanup();
 
             // Trigger hidden event
             this.triggerEvent('hidden');
 
-            console.log(`Editable hidden at ${this.options.timestamp} by ${this.options.user}`);
+            console.log(`Editable hidden and container removed at ${getCurrentTimestamp()} by ${CURRENT_USER}`);
         }
         
         softCleanup() {
-            console.log(`Soft cleanup at ${this.options.timestamp} by ${this.options.user}`);
+            console.log(`Soft cleanup at ${getCurrentTimestamp()} by ${CURRENT_USER}`);
 
             // Clean form content if it exists
             if (this.form) {
-                // Just reset the error container
                 if (typeof this.form.clearError === 'function') {
                     this.form.clearError();
                 }
-
-                // Don't destroy the form, will be recreated on next show
                 this.form = null;
             }
 
             // Release input
             this.input = null;
 
-            // Clean container content but preserve the container
-            if (this.container) {
-                // Empty the content but keep the container
-                this.container.emptyContent();
-            }
+            // Note: Container is now cleaned up in hide()
         }
 
         cancel() {
-            // Hide first
-            this.hide();
+            console.log(`Cancel called at ${getCurrentTimestamp()} by ${CURRENT_USER}`);
 
-            // Perform soft cleanup on cancel
-            if (this.options.cleanupOnCancel) {
-                this.softCleanup();
-            }
+            // Hide will now handle container removal and cleanup
+            this.hide();
 
             // Trigger cancel event
             this.triggerEvent('cancel');
 
-            console.log(`Edit canceled at ${this.options.timestamp} by ${this.options.user}`);
+            console.log(`Edit canceled at ${getCurrentTimestamp()} by ${CURRENT_USER}`);
         }
 
         save(value) {
@@ -1029,48 +1039,55 @@
             // Setup outside click handler
             this.outsideClickHandler = (e) => {
                 if (this.isDestroyed) return;
-                
+
+                console.log(`Outside click detected, onblur setting: ${this.options.onblur} at ${getCurrentTimestamp()}`);
+
                 if (this.isVisible() &&
                     !this.element.contains(e.target) &&
                     e.target !== this.editable.element &&
                     !this.editable.element.contains(e.target)) {
+
+                    console.log(`Valid outside click, handling with onblur: ${this.options.onblur}`);
+
                     // Handle onblur option
                     if (this.options.onblur === 'submit') {
                         if (this.editable.form && typeof this.editable.form.submit === 'function') {
+                            console.log(`Submitting form due to outside click`);
                             this.editable.form.submit();
                         }
                     } else if (this.options.onblur === 'cancel') {
-                        if (typeof this.hide === 'function') {
-                            this.hide();
+                        if (this.editable && typeof this.editable.cancel === 'function') {
+                            console.log(`Canceling due to outside click`);
+                            this.editable.cancel();
                         }
-                        if (this.editable && typeof this.editable.triggerEvent === 'function') {
-                            this.editable.triggerEvent('cancel');
+                    } else {
+                        // Even if onblur is 'ignore', we still need to clean up properly
+                        console.log(`Ignoring edit but cleaning up`);
+                        if (this.editable) {
+                            this.editable.hide(); // This now handles cleanup
                         }
                     }
-                    // If onblur is 'ignore', do nothing
                 }
             };
-            
+
             // Setup escape key handler
             this.escKeyHandler = (e) => {
                 if (this.isDestroyed) return;
-                
+
                 if (e.key === 'Escape' && this.isVisible()) {
                     if (this.options.enableEscape !== false) { // Only respond if not explicitly disabled
-                        if (typeof this.hide === 'function') {
-                            this.hide();
-                        }
-                        if (this.editable && typeof this.editable.triggerEvent === 'function') {
-                            this.editable.triggerEvent('cancel');
+                        // CHANGE: Use the full cancel method
+                        if (this.editable && typeof this.editable.cancel === 'function') {
+                            this.editable.cancel();
                         }
                     }
                 }
             };
-            
-            // Setup enter key handler
+
+            // Setup enter key handler - unchanged
             this.enterKeyHandler = (e) => {
                 if (this.isDestroyed) return;
-                
+
                 // Only proceed if enabled and not in textarea (where Enter should create a new line)
                 if (this.options.enableEnter !== false &&
                     e.key === 'Enter' &&
@@ -1080,7 +1097,7 @@
                     // If the active element is not inside the form, do nothing
                     const form = this.element.querySelector('.editable-form');
                     if (!form || !form.contains(e.target)) return;
-                    
+
                     // Submit the form
                     e.preventDefault();
                     if (this.editable.form && typeof this.editable.form.submit === 'function') {
@@ -1088,8 +1105,8 @@
                     }
                 }
             };
-            
-            // Attach handlers - use capture for some events to ensure they're handled first
+
+            // Attach handlers
             document.addEventListener('mousedown', this.outsideClickHandler);
             document.addEventListener('keyup', this.escKeyHandler);
             document.addEventListener('keydown', this.enterKeyHandler, true);
@@ -1194,6 +1211,23 @@
             }
 
             console.log('Container content emptied');
+        }
+        
+        removeFromDOM() {
+            if (this.isDestroyed || !this.element) return;
+
+            console.log(`Removing container from DOM at ${getCurrentTimestamp()} by ${CURRENT_USER}`);
+
+            // Remove event handlers first
+            this.removeEventHandlers();
+
+            // Remove from DOM
+            if (this.element.parentNode) {
+                this.element.parentNode.removeChild(this.element);
+            }
+
+            // Set flag to prevent further operations
+            this.isDestroyed = true;
         }
     }
 
@@ -1483,6 +1517,23 @@
             // Log cleanup
             console.log(`Container content cleaned up at ${timestamp} by ${user}`);
         }
+        
+        removeFromDOM() {
+            if (this.isDestroyed || !this.element) return;
+
+            console.log(`Removing container from DOM at ${getCurrentTimestamp()} by ${CURRENT_USER}`);
+
+            // Remove event handlers first
+            this.removeEventHandlers();
+
+            // Remove from DOM
+            if (this.element.parentNode) {
+                this.element.parentNode.removeChild(this.element);
+            }
+
+            // Set flag to prevent further operations
+            this.isDestroyed = true;
+        }
     }
 
     /**
@@ -1634,6 +1685,23 @@
             // Log cleanup
             console.log(`Container content cleaned up at ${timestamp} by ${user}`);
 }
+        
+        removeFromDOM() {
+            if (this.isDestroyed || !this.element) return;
+
+            console.log(`Removing container from DOM at ${getCurrentTimestamp()} by ${CURRENT_USER}`);
+
+            // Remove event handlers first
+            this.removeEventHandlers();
+
+            // Remove from DOM
+            if (this.element.parentNode) {
+                this.element.parentNode.removeChild(this.element);
+            }
+
+            // Set flag to prevent further operations
+            this.isDestroyed = true;
+        }
     }
 
     /**
@@ -1895,20 +1963,29 @@
                     this.input.classList.add('empty');
                 }
 
-                // Add CSS for placeholder
-                const style = document.createElement('style');
-                style.textContent = `
-                    [contenteditable=true].empty:before {
-                        content: attr(data-placeholder);
-                        color: #6c757d;
-                        font-style: italic;
-                    }
-                `;
-                document.head.appendChild(style);
+                // Check if the style element already exists
+                let placeholderStyle = document.head.querySelector('style[data-for="editable-wysiwyg-placeholder"]');
+
+                // Only create if it doesn't exist yet
+                if (!placeholderStyle) {
+                    placeholderStyle = document.createElement('style');
+                    placeholderStyle.setAttribute('data-for', 'editable-wysiwyg-placeholder');
+                    placeholderStyle.textContent = `
+                        [contenteditable=true].empty:before {
+                            content: attr(data-placeholder);
+                            color: #6c757d;
+                            font-style: italic;
+                        }
+                    `;
+                    document.head.appendChild(placeholderStyle);
+                }
+
+                // Store reference for cleanup
+                this.placeholderStyleElement = placeholderStyle;
             }
 
             // Log initialization with current timestamp
-            console.log(`WYSIWYG editor initialized at 2025-03-27 06:14:34 by CashEncode`);
+            console.log(`WYSIWYG editor initialized at ${this.timestamp} by ${this.user}`);
         }
 
         _setupToolbar() {
@@ -2073,14 +2150,23 @@
 
         // Enhanced destroy to clean up all handlers
         destroy() {
-            // Call parent destroy which handles common event listeners and calls removeTypeSpecificListeners
+            // Only remove if we're the last editable instance using it
+            if (document.querySelectorAll('.html-editor-wrapper').length <= 1) {
+                const placeholderStyle = document.head.querySelector('style[data-for="editable-wysiwyg-placeholder"]');
+                if (placeholderStyle) {
+                    document.head.removeChild(placeholderStyle);
+                }
+            }
+
+            // Call parent destroy which handles common event listeners
             super.destroy();
 
             // Clean up any remaining elements
             this.toolbar = null;
             this.editorWrapper = null;
+            this.placeholderStyleElement = null;
 
-            console.log(`WYSIWYG TextareaInput destroyed at 2025-03-27 06:14:34 by CashEncode`);
+            console.log(`WYSIWYG TextareaInput destroyed at ${getCurrentTimestamp()} by ${CURRENT_USER}`);
         }
     }
 
