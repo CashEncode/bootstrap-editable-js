@@ -86,7 +86,7 @@
             // Set up click handler
             this._setupClickHandler();
 
-            console.log(`Editable initialized at ${this.options.timestamp} by ${this.options.user}`);
+            console.log(`Editable initialized at ${getCurrentTimestamp()} by ${CURRENT_USER}`);
         }
 
         _setupClickHandler() {
@@ -615,7 +615,7 @@
             // Store a reference to the instance
             const formInstance = this;
 
-            // Add form submit handler
+            // Add form submit handler with proper storage
             this._submitHandler = function(e) {
                 e.preventDefault();
                 formInstance.submit();
@@ -732,10 +732,8 @@
             console.log('Form destroy called');
 
             // Remove event listeners
-            if (this.element) {
-                if (this._keydownHandler) {
-                    this.input.removeEventListener('keydown', this._keydownHandler);
-                }
+            if (this.element && this._submitHandler) {
+                this.element.removeEventListener('submit', this._submitHandler);
             }
 
             if (this.cancelButton && this._cancelHandler) {
@@ -1435,12 +1433,15 @@
         }
         
         cleanup() {
-            // Just clean the content, don't remove the container
-            if (this.body) {
-                this.body.innerHTML = '';
-            }
+            // Empty the content
+            this.emptyContent();
 
-            console.log('Container content cleaned up');
+            // Update timestamp and user information
+            const timestamp = getCurrentTimestamp();
+            const user = CURRENT_USER;
+
+            // Log cleanup
+            console.log(`Container content cleaned up at ${timestamp} by ${user}`);
         }
     }
 
@@ -1567,12 +1568,6 @@
             
             // Show loading indicator
             this.loading.classList.remove('d-none');
-            
-            // Hide form
-            /*const form = this.element.querySelector('.editable-form');
-            if (form) {
-                form.style.visibility = 'hidden';
-            }*/
         }
         
         hideLoading() {
@@ -1582,22 +1577,19 @@
             
             // Hide loading indicator
             this.loading.classList.add('d-none');
-            
-            // Show form
-            /*const form = this.element.querySelector('.editable-form');
-            if (form) {
-                form.style.visibility = 'visible';
-            }*/
         }
         
         cleanup() {
-            // Just clean the content
-            if (this.element) {
-                this.element.innerHTML = '';
-            }
+            // Empty the content
+            this.emptyContent();
 
-            console.log('Inline container content cleaned up');
-        }
+            // Update timestamp and user information
+            const timestamp = getCurrentTimestamp();
+            const user = CURRENT_USER;
+
+            // Log cleanup
+            console.log(`Container content cleaned up at ${timestamp} by ${user}`);
+}
     }
 
     /**
@@ -1751,7 +1743,7 @@
             }
 
             // Clear handler references
-            this._submitHandler = null;
+            this._keydownHandler = null;
             this._blurHandler = null;
 
             // Call parent destroy
@@ -2787,7 +2779,7 @@
             }
 
             // Clear handler references
-            this._submitHandler = null;
+            this._keydownHandler = null;
             this._blurHandler = null;
 
             // Call parent destroy
@@ -2875,7 +2867,7 @@
             }
 
             // Clear handler references
-            this._submitHandler = null;
+            this._keydownHandler = null;
             this._blurHandler = null;
 
             // Call parent destroy
@@ -2963,7 +2955,7 @@
             }
 
             // Clear handler references
-            this._submitHandler = null;
+            this._keydownHandler = null;
             this._blurHandler = null;
 
             // Call parent destroy
