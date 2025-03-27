@@ -84,7 +84,8 @@
             if (!this.element) return;
 
             // Add editable class
-            this.element.classList.add('editable');
+            this.element.classList.add('editable', 'text-primary', 'cursor-pointer');
+            this.element.style.borderBottom = "1px dashed #3E97FF";
 
             // Store reference to editable instance
             this.element.editable = this;
