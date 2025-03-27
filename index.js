@@ -582,9 +582,9 @@
 
                 buttonsContainer.className = buttonPosition;
 
-                // Submit button
+                // Submit button - CHANGED to type="button"
                 const submitButton = document.createElement('button');
-                submitButton.type = 'submit';
+                submitButton.type = 'button'; // Changed from 'submit' to 'button'
                 submitButton.className = 'btn btn-primary btn-icon btn-sm editable-submit';
                 submitButton.innerHTML = '<i class="ki-duotone ki-check fs-2x"></i>';
 
@@ -601,6 +601,13 @@
                 // Store reference to this instance for the event handler
                 const formInstance = this;
 
+                // Add direct click handlers to buttons
+                this._submitClickHandler = function(e) {
+                    e.preventDefault();
+                    formInstance.submit();
+                };
+                submitButton.addEventListener('click', this._submitClickHandler);
+
                 // Add event listener for cancel button
                 this._cancelHandler = function(e) {
                     e.preventDefault();
@@ -613,6 +620,10 @@
 
                 // Append buttons container to form
                 this.element.appendChild(buttonsContainer);
+
+                // Store references to buttons
+                this.submitButton = submitButton;
+                this.cancelButton = cancelButton;
             }
 
             // Create error container
@@ -630,12 +641,26 @@
                 this.editable.container.setContent(this.element);
             }
 
-            // Set initial value - CRITICAL PART
+            // Store a reference to the instance
+            const formInstance = this;
+
+            // Add form submit handler - still needed for Enter key
+            this._submitHandler = function(e) {
+                e.preventDefault(); // Prevent default form submission
+                formInstance.submit();
+            };
+            this.element.addEventListener('submit', this._submitHandler);
+
+            // Set up autosubmit if no buttons are shown
+            if (!this.options.showbuttons && this.input) {
+                this.input.autosubmit();
+            }
+
+            // Set initial value
             const value = this.editable && this.editable.options ? 
                 (this.editable.options.value !== null ? 
                     this.editable.options.value : this.editable.options.defaultValue) : '';
 
-            // Explicitly set input value
             if (this.input && typeof this.input.value2input === 'function') {
                 this.input.value2input(value);
             }
@@ -738,6 +763,10 @@
             // Remove event listeners
             if (this.element && this._submitHandler) {
                 this.element.removeEventListener('submit', this._submitHandler);
+            }
+            
+            if (this.submitButton && this._submitClickHandler) {
+                this.submitButton.removeEventListener('click', this._submitClickHandler);
             }
 
             if (this.cancelButton && this._cancelHandler) {
