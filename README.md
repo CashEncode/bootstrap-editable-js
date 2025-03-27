@@ -23,15 +23,6 @@
   <li><strong>Responsive Design</strong>: Works on all device sizes</li>
   <li><strong>Automatic Cleanup</strong>: Proper memory management with no leaks</li>
 </ul>
-<h3>Installation</h3>
-bash
-<div>
-  <div>
-  </div>
-</div>
-<div>
-  <pre>npm install bootstrap-editable-js</pre>
-</div>
 <h3>Sample Usage</h3>
 JavaScript
 <div>
