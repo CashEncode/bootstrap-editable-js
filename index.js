@@ -33,6 +33,28 @@
         cleanupOnHide: false    // Clean up container on hide (careful with this one)
     };
     
+    /**
+     * Utility function to generate the current timestamp in YYYY-MM-DD HH:MM:SS format
+     * @returns {string} Formatted timestamp
+     */
+    function getCurrentTimestamp() {
+        const now = new Date();
+
+        // Format date components with padding
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+
+        // Return formatted timestamp
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    }
+
+    // Current user is pulled from a configuration or login system
+    const CURRENT_USER = 'CashEncode';
+    
     class Editable {
         constructor(element, options = {}) {
             // Store element
@@ -45,8 +67,8 @@
             };
 
             // Store current date and user for logging
-            this.options.timestamp = '2025-03-27 03:03:23';
-            this.options.user = 'CashEncode';
+            this.options.timestamp = getCurrentTimestamp();
+            this.options.user = CURRENT_USER;
 
             // Initialize
             this.init();
@@ -562,14 +584,14 @@
                 const formInstance = this;
 
                 // Add event listener for cancel button
-                cancelButton.addEventListener('click', function(e) {
+                this._cancelHandler = function(e) {
                     e.preventDefault();
-
                     // Use the cancel method on editable
                     if (formInstance.editable && typeof formInstance.editable.cancel === 'function') {
                         formInstance.editable.cancel();
                     }
-                });
+                };
+                cancelButton.addEventListener('click', this._cancelHandler);
 
                 // Append buttons container to form
                 this.element.appendChild(buttonsContainer);
@@ -594,10 +616,11 @@
             const formInstance = this;
 
             // Add form submit handler
-            this.element.addEventListener('submit', function(e) {
+            this._submitHandler = function(e) {
                 e.preventDefault();
                 formInstance.submit();
-            });
+            };
+            this.element.addEventListener('submit', this._submitHandler);
 
             // Set up autosubmit if no buttons are shown
             if (!this.options.showbuttons && this.input) {
@@ -710,8 +733,8 @@
 
             // Remove event listeners
             if (this.element) {
-                if (this._submitHandler) {
-                    this.element.removeEventListener('submit', this._submitHandler);
+                if (this._keydownHandler) {
+                    this.input.removeEventListener('keydown', this._keydownHandler);
                 }
             }
 
@@ -741,8 +764,8 @@
 
             // Remove event listeners
             if (this.element) {
-                if (this._submitHandler) {
-                    this.element.removeEventListener('submit', this._submitHandler);
+                if (this._keydownHandler) {
+                    this.input.removeEventListener('keydown', this._keydownHandler);
                 }
             }
 
@@ -784,8 +807,8 @@
             this._keydownHandler = null;
 
             // Timestamp and user for logging
-            this.timestamp = '2025-03-27 03:33:16';
-            this.user = 'CashEncode';
+            this.timestamp = getCurrentTimestamp();
+            this.user = CURRENT_USER;
 
             this.init();
         }
@@ -1114,7 +1137,25 @@
         }
         
         emptyContent() {
-            // Abstract method to be implemented by subclasses
+            // Base implementation - override in child classes
+            if (this.element) {
+                // Store loading element if present
+                const loading = this.element.querySelector('.editable-loading');
+
+                // Clear content 
+                while (this.element.firstChild) {
+                    if (this.element.firstChild !== loading) {
+                        this.element.removeChild(this.element.firstChild);
+                    } else {
+                        // Skip the loading element
+                        const nextSibling = this.element.firstChild.nextSibling;
+                        if (!nextSibling) break;
+                        this.element.removeChild(nextSibling);
+                    }
+                }
+            }
+
+            console.log('Container content emptied');
         }
     }
 
@@ -1408,6 +1449,11 @@
      */
     class InlineContainer extends AbstractContainer {
         init() {
+            // Initialize handler references to null
+            this._resizeHandler = null;
+            this._scrollHandler = null;
+            this._outsideClickHandler = null;
+            
             // Create inline container
             this.element = document.createElement('div');
             this.element.classList.add('editable-container', 'editable-inline', 'position-relative', 'mb-3');
@@ -1445,8 +1491,13 @@
         }
         
         emptyContent() {
+            // Preserve the loading indicator
+            const loading = this.loading;
             if (this.element) {
                 this.element.innerHTML = '';
+                if (loading) {
+                    this.element.appendChild(loading);
+                }
             }
         }
         
@@ -1466,6 +1517,9 @@
         }
 
         destroy() {
+            // Call parent's removeEventHandlers first
+            this.removeEventHandlers();
+
             // Only use for complete removal
             if (this.element && this.element.parentNode) {
                 this.element.parentNode.removeChild(this.element);
@@ -1473,6 +1527,9 @@
 
             this.element = null;
             this.loading = null;
+            this._resizeHandler = null;
+            this._scrollHandler = null;
+            this._outsideClickHandler = null;
         }
         
         setContent(content) {
@@ -1685,8 +1742,8 @@
         destroy() {
             // Remove event listeners
             if (this.input) {
-                if (this._submitHandler) {
-                    this.input.removeEventListener('keydown', this._submitHandler);
+                if (this._keydownHandler) {
+                    this.input.removeEventListener('keydown', this._keydownHandler);
                 }
                 if (this._blurHandler) {
                     this.input.removeEventListener('blur', this._blurHandler);
@@ -1786,8 +1843,8 @@
         destroy() {
             // Remove event listeners
             if (this.input) {
-                if (this._submitHandler) {
-                    this.input.removeEventListener('keydown', this._submitHandler);
+                if (this._keydownHandler) {
+                    this.input.removeEventListener('keydown', this._keydownHandler);
                 }
                 if (this._blurHandler) {
                     this.input.removeEventListener('blur', this._blurHandler);
@@ -2633,8 +2690,8 @@
         destroy() {
             // Remove event listeners
             if (this.input) {
-                if (this._submitHandler) {
-                    this.input.removeEventListener('keydown', this._submitHandler);
+                if (this._keydownHandler) {
+                    this.input.removeEventListener('keydown', this._keydownHandler);
                 }
                 if (this._blurHandler) {
                     this.input.removeEventListener('blur', this._blurHandler);
@@ -2721,8 +2778,8 @@
         destroy() {
             // Remove event listeners
             if (this.input) {
-                if (this._submitHandler) {
-                    this.input.removeEventListener('keydown', this._submitHandler);
+                if (this._keydownHandler) {
+                    this.input.removeEventListener('keydown', this._keydownHandler);
                 }
                 if (this._blurHandler) {
                     this.input.removeEventListener('blur', this._blurHandler);
@@ -2809,8 +2866,8 @@
         destroy() {
             // Remove event listeners
             if (this.input) {
-                if (this._submitHandler) {
-                    this.input.removeEventListener('keydown', this._submitHandler);
+                if (this._keydownHandler) {
+                    this.input.removeEventListener('keydown', this._keydownHandler);
                 }
                 if (this._blurHandler) {
                     this.input.removeEventListener('blur', this._blurHandler);
@@ -2897,8 +2954,8 @@
         destroy() {
             // Remove event listeners
             if (this.input) {
-                if (this._submitHandler) {
-                    this.input.removeEventListener('keydown', this._submitHandler);
+                if (this._keydownHandler) {
+                    this.input.removeEventListener('keydown', this._keydownHandler);
                 }
                 if (this._blurHandler) {
                     this.input.removeEventListener('blur', this._blurHandler);
@@ -3024,8 +3081,8 @@
         destroy() {
             // Remove event listeners
             if (this.input) {
-                if (this._submitHandler) {
-                    this.input.removeEventListener('keydown', this._submitHandler);
+                if (this._keydownHandler) {
+                    this.input.removeEventListener('keydown', this._keydownHandler);
                 }
                 if (this._changeHandler) {
                     this.input.removeEventListener('change', this._changeHandler);
