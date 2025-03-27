@@ -7,244 +7,218 @@
     /**
      * Main Editable class
      */
+    const defaults = {
+        type: 'text',         // Input type
+        pk: null,             // Primary key
+        name: null,           // Field name
+        value: null,          // Initial value
+        url: null,            // URL for submit
+        params: {},           // Additional params for submit
+        placement: 'top',     // Placement of popover
+        title: '',            // Title text
+        mode: 'popup',        // Mode: popup or inline
+        showbuttons: true,    // Show submit/cancel buttons
+        defaultValue: null,   // Default value if input is empty
+        validate: null,       // Validate function
+        success: null,        // Success callback
+        error: null,          // Error callback
+        emptytext: 'Empty',   // Text when value is empty
+        savenochange: false,  // Save if value not changed
+        autosubmit: false,    // Auto-submit when input changed
+        onblur: null,         // On blur behavior: 'cancel', 'submit', 'ignore'
+
+        // Cleanup options
+        cleanupOnSave: true,    // Clean up DOM elements after successful save
+        cleanupOnCancel: true,  // Clean up DOM elements after cancel
+        cleanupOnHide: false    // Clean up container on hide (careful with this one)
+    };
+    
     class Editable {
         constructor(element, options = {}) {
-            if (typeof element === 'string') {
-                element = document.querySelector(element);
-            }
-            if (!element || !(element instanceof HTMLElement)) {
-                throw new Error('Element must be a valid DOM node');
-            }
+            // Store element
             this.element = element;
-            // Default options
+
+            // Merge default options with provided options
             this.options = {
-                type: 'text',
-                pk: null,
-                value: null,
-                url: null,
-                source: null,
-                showbuttons: true,
-                onblur: 'cancel',
-                enableEscape: true, 
-                enableEnter: true, 
-                mode: 'popup',
-                emptytext: 'Empty',
-                placeholder: '',
-                disabled: false,
-                toggle: 'click',
-                validate: null,
-                success: null,
-                error: null,
-                ajaxOptions: {},
-                name: null,
-                params: {},
-                send: 'auto',
-                autosubmit: false,
-                display: null,
+                ...defaults,
                 ...options
             };
-            
-            // Extract name from ID if not defined
-            if (!this.options.name && this.element.id) {
-                this.options.name = this.element.id;
-            }
-            
-            // Extract value from element content if not defined
-            if (this.options.value === null) {
-                this.options.value = this.element.textContent.trim();
-            }
-            
-            // Initialize active state tracking
-            this.isActive = false;
-            this.isDestroyed = false;
-            
-            // Initialize the input
-            this.input = this.createInput(this.options.type);
-            
-            // Create container
-            this.container = this.options.mode === 'inline' ?
-                new InlineContainer(this) :
-                new PopoverContainer(this);
-            
-            // Create form
-            this.form = new EditableForm(this);
-            
-            // Store reference to this instance in DOM element
-            this.element.editable = this;
-            
+
+            // Store current date and user for logging
+            this.options.timestamp = '2025-03-27 03:03:23';
+            this.options.user = 'CashEncode';
+
             // Initialize
             this.init();
         }
-        
+
         init() {
+            if (!this.element) return;
+
             // Add editable class
             this.element.classList.add('editable');
-            
-            // Handle empty state
-            this.handleEmpty();
-            
-            // Add event handlers
-            this.attachHandlers();
-            
-            // If disabled, apply disabled state
-            if (this.options.disabled) {
-                this.disable();
-            }
+
+            // Store reference to editable instance
+            this.element.editable = this;
+
+            // Set up click handler
+            this._setupClickHandler();
+
+            console.log(`Editable initialized at ${this.options.timestamp} by ${this.options.user}`);
         }
-        
-        createInput(type) {
-            const inputTypes = {
-                text: TextInput,
-                textarea: TextareaInput,
-                select: SelectInput,
-                checklist: ChecklistInput,
-                date: DateInput,
-                datetime: DateTimeInput,
-                password: PasswordInput,
-                email: EmailInput,
-                url: UrlInput,
-                tel: TelInput,
-                number: NumberInput,
-                range: RangeInput
-            };
-            const InputClass = inputTypes[type] || TextInput;
-            return new InputClass(this);
-        }
-        
-        attachHandlers() {
-            if (this.options.toggle !== 'manual') {
-                this.element.classList.add('text-primary', 'cursor-pointer', 'text-decoration-underline');
-                
-                // Create a bound handler function to maintain context
-                this.toggleHandler = (e) => {
-                    if (!this.isDestroyed && !this.options.disabled) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (this.options.toggle === 'mouseenter') {
-                            this.show();
-                        } else {
-                            this.toggle();
-                        }
-                    }
-                };
-                
-                this.element.addEventListener(this.options.toggle, this.toggleHandler);
+
+        _setupClickHandler() {
+            if (!this.element) return;
+
+            // Remove any existing click handler first
+            if (this._clickHandler) {
+                this.element.removeEventListener('click', this._clickHandler);
             }
-        }
-        
-        show() {
-            if (this.isDestroyed || this.options.disabled || this.isActive) return;
-            
-            // Set active state
-            this.isActive = true;
-            
-            // Close other editable elements if needed
-            if (this.options.mode === 'popup') {
-                document.querySelectorAll('.editable-open').forEach(el => {
-                    if (el !== this.element && el.editable) {
-                        el.editable.hide();
-                    }
-                });
-            }
-            
-            this.element.classList.add('editable-open');
-            
-            // Show container first
-            if (this.container && typeof this.container.show === 'function') {
-                this.container.show();
-                
-                // Then render form - this sequence is important
-                if (this.form && typeof this.form.render === 'function') {
-                    this.form.render();
+
+            // Create a fresh click handler
+            this._clickHandler = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // If already open, do nothing
+                if (this.element.classList.contains('editable-open')) {
+                    return;
                 }
-            }
-            
-            this.triggerEvent('shown');
+
+                this.show();
+            };
+
+            // Add the click handler
+            this.element.addEventListener('click', this._clickHandler);
         }
-        
+
+        show() {
+            if (!this.element) return;
+
+            // Add open class
+            this.element.classList.add('editable-open');
+
+            // Create container if needed
+            if (!this.container) {
+                this._createContainer();
+            }
+
+            // Create form if needed
+            if (!this.form) {
+                this._createForm();
+            }
+
+            // Create input if needed
+            if (!this.input) {
+                this._createInput();
+            }
+
+            // Show container
+            if (this.container) {
+                this.container.show();
+            }
+
+            // Trigger shown event
+            this.triggerEvent('shown');
+
+            console.log(`Editable shown at ${this.options.timestamp} by ${this.options.user}`);
+        }
+
+        _createContainer() {
+            // Create container based on mode
+            if (this.options.mode === 'popup') {
+                this.container = new PopoverContainer(this, this.options);
+            } else if (this.options.mode === 'inline') {
+                this.container = new InlineContainer(this, this.options);
+            }
+        }
+
+        _createForm() {
+            // Create form component
+            this.form = new EditableForm(this);
+        }
+
+        _createInput() {
+            // Create input based on type
+            const type = this.options.type || 'text';
+
+            switch (type) {
+                case 'textarea':
+                    this.input = new TextareaInput(this, this.options);
+                    break;
+                case 'select':
+                    this.input = new SelectInput(this, this.options);
+                    break;
+                // Add other input types as needed
+                default:
+                    this.input = new TextInput(this, this.options);
+            }
+        }
+
         hide() {
-            if (this.isDestroyed) return;
-            
-            // Update state
-            this.isActive = false;
+            if (!this.element) return;
+
+            // Remove open class
             this.element.classList.remove('editable-open');
-            
+
+            // Clear any errors
+            if (this.form && typeof this.form.clearError === 'function') {
+                this.form.clearError();
+            }
+
             // Hide container
-            if (this.container && typeof this.container.hide === 'function') {
+            if (this.container) {
                 this.container.hide();
             }
-            
-            // Allow form to clean up
-            if (this.form && typeof this.form.onHide === 'function') {
-                this.form.onHide();
-            }
-            
+
+            // Trigger hidden event
             this.triggerEvent('hidden');
+
+            console.log(`Editable hidden at ${this.options.timestamp} by ${this.options.user}`);
         }
-        
-        toggle() {
-            if (this.element.classList.contains('editable-open')) {
-                this.hide();
-            } else {
-                this.show();
-            }
-        }
-        
-        enable() {
-            this.options.disabled = false;
-            this.element.classList.remove('editable-disabled');
-            this.handleEmpty();
-        }
-        
-        disable() {
-            this.options.disabled = true;
-            this.element.classList.add('editable-disabled');
-            this.hide();
-            this.handleEmpty();
-        }
-        
-        toggleDisabled() {
-            if (this.options.disabled) {
-                this.enable();
-            } else {
-                this.disable();
-            }
-        }
-        
-        handleEmpty() {
-            const isEmpty = !this.element.textContent.trim();
-            if (isEmpty) {
-                if (!this.options.disabled) {
-                    this.element.innerHTML = this.options.emptytext;
-                    this.element.classList.add('editable-empty');
-                } else {
-                    this.element.innerHTML = '';
+
+        /**
+         * Soft cleanup that preserves the editable functionality
+         */
+        softCleanup() {
+            console.log(`Soft cleanup at ${this.options.timestamp} by ${this.options.user}`);
+
+            // Clean form content if it exists
+            if (this.form) {
+                // Just reset the error container
+                if (typeof this.form.clearError === 'function') {
+                    this.form.clearError();
                 }
-            } else if (this.element.classList.contains('editable-empty')) {
-                this.element.classList.remove('editable-empty');
+
+                // Don't destroy the form, will be recreated on next show
+                this.form = null;
+            }
+
+            // Release input
+            this.input = null;
+
+            // Clean container content but preserve the container
+            if (this.container) {
+                // Empty the content but keep the container
+                this.container.emptyContent();
             }
         }
-        
-        setValue(value, convert = false) {
-            this.options.value = convert ? this.input.str2value(value) : value;
-            let displayValue;
-            
-            if (typeof this.options.display === 'function') {
-                displayValue = this.options.display.call(this.element, this.options.value);
-            } else if (this.input && typeof this.input.value2html === 'function') {
-                displayValue = this.input.value2html(this.options.value);
+
+        cancel() {
+            // Hide first
+            this.hide();
+
+            // Perform soft cleanup on cancel
+            if (this.options.cleanupOnCancel) {
+                this.softCleanup();
             }
-            
-            if (displayValue !== undefined) {
-                this.element.innerHTML = displayValue;
-            }
-            
-            this.handleEmpty();
-            this.triggerEvent('update', {
-                value: this.options.value
-            });
+
+            // Trigger cancel event
+            this.triggerEvent('cancel');
+
+            console.log(`Edit canceled at ${this.options.timestamp} by ${this.options.user}`);
         }
-        
+
         save(value) {
             const previousValue = this.options.value;
             this.options.value = value;
@@ -268,11 +242,13 @@
                 const pk = typeof this.options.pk === 'function' ?
                     this.options.pk() : this.options.pk;
 
-                // Prepare data
+                // Prepare data with user and timestamp
                 let data = {
                     name: this.options.name || '',
                     value: submitValue,
-                    pk: pk
+                    pk: pk,
+                    timestamp: this.options.timestamp,
+                    user: this.options.user
                 };
 
                 // Add additional params
@@ -301,7 +277,7 @@
                 // Send data
                 fetch(this.options.url, ajaxOptions)
                     .then(response => {
-                        // Check if the response is ok (status in the range 200-299)
+                        // Check if the response is ok
                         if (!response.ok) {
                             const error = new Error(`Server returned ${response.status}: ${response.statusText}`);
                             error.status = response.status;
@@ -320,13 +296,12 @@
                                 if (this.form && typeof this.form.error === 'function') {
                                     this.form.error(responseData.message || "Unknown error occurred");
                                 }
-                                // Don't hide the form or update the value
+                                // Don't hide or clean up
                                 return;
                             } 
                             else if (responseData.status === "success") {
                                 // Display success toast if toastr is available
                                 if (typeof toastr !== 'undefined') {
-                                    // Use toast notification for success
                                     toastr.success(
                                         responseData.message || "Changes saved successfully", 
                                         responseData.title || "", 
@@ -338,33 +313,24 @@
                                     );
                                 }
 
-                                // Set new value
-                                this.setValue(value);
-
-                                // Hide form
-                                this.hide();
-
-                                // Trigger save event
-                                this.triggerEvent('save', {
-                                    newValue: value,
-                                    submitValue: submitValue,
-                                    response: responseData
-                                });
-
+                                // Handle successful save
+                                this.handleSuccessfulSave(value, submitValue, responseData);
                                 return;
                             }
                         }
 
-                        // Legacy support for custom success callback
+                        // Legacy success callback
                         if (typeof this.options.success === 'function') {
                             const result = this.options.success.call(this.element, responseData, value);
                             if (result === false) {
-                                // Keep form open and don't set value
+                                // Keep form open, don't set value
                                 return;
                             }
                             if (typeof result === 'string') {
                                 // Show error
-                                this.form.error(result);
+                                if (this.form && typeof this.form.error === 'function') {
+                                    this.form.error(result);
+                                }
                                 return;
                             }
                             if (result && typeof result === 'object' && result.hasOwnProperty('newValue')) {
@@ -373,23 +339,15 @@
                             }
                         }
 
-                        // Default success behavior if no specific status handling occurred
-                        this.setValue(value);
-                        this.hide();
-
-                        // Trigger save event
-                        this.triggerEvent('save', {
-                            newValue: value,
-                            submitValue: submitValue,
-                            response: responseData
-                        });
+                        // Default success behavior
+                        this.handleSuccessfulSave(value, submitValue, responseData);
                     })
                     .catch(error => {
                         this.container.hideLoading();
 
                         console.error('Fetch error:', error);
 
-                        // Create a user-friendly error message based on the error
+                        // Create a user-friendly error message
                         let userErrorMsg;
 
                         if (error.status === 404) {
@@ -407,21 +365,16 @@
                         // Run error callback if defined
                         if (typeof this.options.error === 'function') {
                             const customErrorMsg = this.options.error.call(this.element, error, value);
-                            // Use custom error message if returned
                             if (customErrorMsg) {
                                 userErrorMsg = customErrorMsg;
                             }
                         }
 
-                        // Make sure the form is still available
+                        // Show error in form
                         if (this.form && typeof this.form.error === 'function') {
-                            // Show error in the form
                             this.form.error(userErrorMsg);
                         } else {
-                            // Fallback if form is not available
-                            console.error('Form not available to display error:', userErrorMsg);
-
-                            // Display toast error notification if toastr is available
+                            // Fallback to toastr
                             if (typeof toastr !== 'undefined') {
                                 toastr.error(userErrorMsg, 'Error', {
                                     closeButton: true,
@@ -433,81 +386,90 @@
                     });
             } else {
                 // Just set new value without sending to server
-                this.setValue(value);
-                this.hide();
+                this.handleSuccessfulSave(value, submitValue, null);
+            }
+        }
 
-                // Trigger save event
-                this.triggerEvent('save', {
-                    newValue: value,
-                    submitValue: submitValue
-                });
+        handleSuccessfulSave(value, submitValue, responseData) {
+            // Set new value
+            this.setValue(value);
+
+            // Hide the form
+            this.hide();
+
+            // Clean up if configured
+            if (this.options.cleanupOnSave) {
+                this.softCleanup();
+            }
+
+            // Trigger save event
+            this.triggerEvent('save', {
+                newValue: value,
+                submitValue: submitValue,
+                response: responseData,
+                timestamp: this.options.timestamp,
+                user: this.options.user
+            });
+
+            console.log(`Successfully saved at ${this.options.timestamp} by ${this.options.user}`);
+        }
+
+        setValue(value) {
+            this.options.value = value;
+
+            // Update the display value
+            const displayValue = (value === null || value === undefined || value === '') ? 
+                this.options.emptytext : value;
+
+            // Update element content
+            if (this.element) {
+                this.element.innerHTML = displayValue;
             }
         }
-        
-        validate(value) {
-            if (typeof this.options.validate === 'function') {
-                return this.options.validate.call(this.element, value);
-            }
-            return null;
-        }
-        
-        triggerEvent(eventName, params = {}) {
-            if (this.isDestroyed) return;
-            
-            const event = new CustomEvent(`editable.${eventName}`, {
+
+        // Trigger custom event
+        triggerEvent(eventName, data = {}) {
+            if (!this.element) return;
+
+            const event = new CustomEvent(`editable:${eventName}`, {
                 bubbles: true,
+                cancelable: true,
                 detail: {
-                    ...params,
-                    editable: this
+                    editable: this,
+                    ...data
                 }
             });
+
             this.element.dispatchEvent(event);
         }
-        
+
+        // Full destroy - use only when completely removing the editable
         destroy() {
-            // Mark as destroyed to prevent further operations
-            this.isDestroyed = true;
-            this.isActive = false;
-            
-            // Remove event listeners
-            if (this.options.toggle !== 'manual' && this.toggleHandler) {
-                this.element.removeEventListener(this.options.toggle, this.toggleHandler);
+            console.log(`Editable destroyed at ${this.options.timestamp} by ${this.options.user}`);
+
+            // Remove click handler
+            if (this.element && this._clickHandler) {
+                this.element.removeEventListener('click', this._clickHandler);
             }
-            
-            // Hide and destroy container
-            if (this.container) {
-                if (typeof this.container.hide === 'function') {
-                    this.container.hide();
-                }
-                if (typeof this.container.destroy === 'function') {
-                    this.container.destroy();
-                }
+
+            // Remove editable reference and class
+            if (this.element) {
+                this.element.editable = null;
+                this.element.classList.remove('editable', 'editable-open');
             }
-            
-            // Allow form to clean up
-            if (this.form && typeof this.form.destroy === 'function') {
-                this.form.destroy();
+
+            // Destroy container
+            if (this.container && typeof this.container.destroy === 'function') {
+                this.container.destroy();
             }
-            
-            // Clean up input
-            if (this.input && typeof this.input.destroy === 'function') {
-                this.input.destroy();
-            }
-            
-            // Remove classes
-            this.element.classList.remove(
-                'editable', 'editable-open', 'editable-disabled',
-                'text-primary', 'cursor-pointer', 'text-decoration-underline'
-            );
-            
-            // Remove reference to editable instance
-            delete this.element.editable;
-            
-            // Clear references
-            this.element = null;
+
+            // Nullify all references
             this.container = null;
             this.form = null;
             this.input = null;
+            this._clickHandler = null;
+            this.element = null;
+            this.options = null;
         }
     }
 
@@ -517,262 +479,266 @@
     class EditableForm {
         constructor(editable) {
             this.editable = editable;
-            this.options = editable.options;
-            this.input = editable.input;
-            
-            // Initialize properties
-            this.element = null;
-            this.errorContainer = null;
-            this.isDestroyed = false;
-            this.isSubmitting = false;
-            this.submitHandlers = [];
-            
-            // Bind methods to preserve context
+            this.options = editable ? editable.options : {};
+            this.input = editable ? editable.input : null;
+            this.hasError = false;
+
+            // Explicitly bind methods
             this.submit = this.submit.bind(this);
+            this.clearError = this.clearError.bind(this);
             this.error = this.error.bind(this);
-            this.onHide = this.onHide.bind(this);
         }
-        
+
         render() {
-            // Reset state
-            this.isDestroyed = false;
-            this.isSubmitting = false;
-            
             // Create form element
             this.element = document.createElement('form');
             this.element.className = 'editable-form';
-            
+
             // Create input container
             const inputContainer = document.createElement('div');
             inputContainer.classList.add('editable-input', 'w-100');
-            
-            try {
-                // Render input
-                if (this.input && typeof this.input.render === 'function') {
-                    this.input.render();
-                    
-                    // Append input to container if it exists
-                    if (this.input.element) {
-                        inputContainer.appendChild(this.input.element);
-                    }
-                }
-            } catch (e) {
-                console.error('Error rendering input:', e);
+
+            // Render input
+            if (this.input && typeof this.input.render === 'function') {
+                this.input.render();
             }
-            
+
+            // Append input to container
+            if (this.input && this.input.element) {
+                inputContainer.appendChild(this.input.element);
+            }
+
+            // Reset error state
+            this.hasError = false;
+
             // Append input container to form
             this.element.appendChild(inputContainer);
-            
-            // Create error container BEFORE buttons
-            this.errorContainer = document.createElement('div');
-            this.errorContainer.className = 'editable-error text-danger d-none';
-            
+
             // Create buttons if needed
             if (this.options.showbuttons) {
                 // Create buttons container
                 const buttonsContainer = document.createElement('div');
                 buttonsContainer.className = 'd-flex justify-content-end m-3 me-0 mb-0 gap-1';
-                
+
                 // Submit button
                 const submitButton = document.createElement('button');
                 submitButton.type = 'submit';
                 submitButton.className = 'btn btn-primary btn-icon btn-sm editable-submit';
                 submitButton.innerHTML = '<i class="ki-duotone ki-check fs-2x"></i>';
-                
+
                 // Cancel button
                 const cancelButton = document.createElement('button');
                 cancelButton.type = 'button';
                 cancelButton.className = 'btn btn-secondary btn-icon btn-sm editable-cancel';
                 cancelButton.innerHTML = '<i class="ki-duotone ki-cross fs-2x"><span class="path1"></span><span class="path2"></span></i>';
-                
+
                 // Add buttons to container
                 buttonsContainer.appendChild(submitButton);
                 buttonsContainer.appendChild(cancelButton);
-                
-                // Create a stable event handler
-                const cancelHandler = (e) => {
-                    e.preventDefault();
-                    if (!this.isDestroyed && this.editable && typeof this.editable.hide === 'function') {
-                        this.editable.hide();
-                        this.editable.triggerEvent('cancel');
-                    }
-                };
-                
-                // Store handler reference for cleanup
-                this.cancelHandler = cancelHandler;
-                
+
+                // Store reference to this instance for the event handler
+                const formInstance = this;
+
                 // Add event listener for cancel button
-                cancelButton.addEventListener('click', cancelHandler);
-                
+                cancelButton.addEventListener('click', function(e) {
+                    e.preventDefault();
+
+                    // Use the cancel method on editable
+                    if (formInstance.editable && typeof formInstance.editable.cancel === 'function') {
+                        formInstance.editable.cancel();
+                    }
+                });
+
                 // Append buttons container to form
                 this.element.appendChild(buttonsContainer);
             }
-            
-            // Append error container AFTER buttons
+
+            // Create error container
+            this.errorContainer = document.createElement('div');
+            this.errorContainer.className = 'editable-error text-danger';
+            this.errorContainer.style.display = 'none';
+            this.errorContainer.style.marginTop = '0.5rem';
+            this.errorContainer.style.fontWeight = '500';
+
+            // Append error container to form
             this.element.appendChild(this.errorContainer);
-            
-            // Create a stable submit handler
-            const submitHandler = (e) => {
-                if (e) {
-                    e.preventDefault();
-                }
-                
-                // Prevent multiple submissions
-                if (this.isSubmitting) {
-                    return;
-                }
-                
-                // Make sure the form is still valid before submitting
-                if (!this.isDestroyed && this.element) {
-                    this.submit();
-                }
-            };
-            
-            // Store handler reference for cleanup
-            this.submitHandler = submitHandler;
-            
-            // Add to handlers array to track all handlers
-            this.submitHandlers.push(submitHandler);
-            
-            // Add form submit handler
-            this.element.addEventListener('submit', submitHandler);
-            
+
             // Add form to container
-            if (this.editable.container && typeof this.editable.container.setContent === 'function') {
+            if (this.editable && this.editable.container) {
                 this.editable.container.setContent(this.element);
-            } else {
-                console.error('Container is missing or setContent method is not available');
             }
-            
+
+            // Store a reference to the instance
+            const formInstance = this;
+
+            // Add form submit handler
+            this.element.addEventListener('submit', function(e) {
+                e.preventDefault();
+                formInstance.submit();
+            });
+
             // Set up autosubmit if no buttons are shown
             if (!this.options.showbuttons && this.input) {
-                if (typeof this.input.autosubmit === 'function') {
-                    this.input.autosubmit();
-                }
+                this.input.autosubmit();
             }
-            
+
             // Set initial value
-            const value = this.editable.options.value !== null ? 
-                this.editable.options.value : this.editable.options.defaultValue;
-            
+            const value = this.editable && this.editable.options ? 
+                (this.editable.options.value !== null ? 
+                    this.editable.options.value : this.editable.options.defaultValue) : '';
+
             if (this.input && typeof this.input.value2input === 'function') {
                 this.input.value2input(value);
             }
-            
-            // Activate input (focus) using setTimeout to ensure DOM is ready
-            if (this.input && typeof this.input.activate === 'function') {
-                setTimeout(() => {
-                    if (!this.isDestroyed && this.input) {
-                        this.input.activate();
-                    }
-                }, 10); // Slightly longer timeout for better compatibility
-            }
+
+            // Activate input (focus)
+            setTimeout(() => {
+                if (this.input && typeof this.input.activate === 'function') {
+                    this.input.activate();
+                }
+            }, 0);
         }
-        
+
         submit() {
-            // Safety check - verify form is still valid before proceeding
-            if (this.isDestroyed || this.isSubmitting || !this.element || !this.input) {
-                console.warn('Submit called on invalid form state. Form destroyed or elements missing.');
+            // Safety check
+            if (!this.element || !this.input || !this.editable) {
+                console.warn('Submit called with missing components');
                 return;
             }
-            
-            // Set flag to prevent multiple submissions
-            this.isSubmitting = true;
-            
+
             try {
                 // Get value from input
                 const newValue = this.input.input2value();
-                
+
+                // Log the submission
+                console.log(`Form submission at ${this.options.timestamp} by ${this.options.user}`);
+
                 // Validate value
-                let error = null;
-                if (this.editable && typeof this.editable.validate === 'function') {
-                    error = this.editable.validate(newValue);
-                }
-                
+                const error = this.editable && typeof this.editable.validate === 'function' ? 
+                    this.editable.validate(newValue) : null;
+
                 if (error) {
                     this.error(error);
-                    this.isSubmitting = false;
                     return;
                 }
-                
+
                 // Clear any errors
-                this.error(false);
-                
-                // Save value - check if editable still exists
-                if (this.editable && typeof this.editable.save === 'function') {
+                this.clearError();
+
+                // Save value
+                if (typeof this.editable.save === 'function') {
                     this.editable.save(newValue);
-                    // Note: isSubmitting will be reset when the form is hidden or when a new form is rendered
-                } else {
-                    console.warn('Cannot save value - editable instance is missing or invalid');
-                    this.isSubmitting = false;
                 }
             } catch (e) {
                 console.error('Error during form submission:', e);
-                this.error('An unexpected error occurred during submission');
-                this.isSubmitting = false;
+                this.error('An unexpected error occurred');
             }
         }
-        
+
+        clearError() {
+            if (!this.errorContainer) return;
+
+            this.errorContainer.classList.add('d-none');
+            this.errorContainer.textContent = '';
+            this.errorContainer.style.display = 'none';
+
+            if (this.element) {
+                this.element.classList.remove('text-danger', 'is-invalid');
+            }
+
+            this.hasError = false;
+        }
+
         error(msg) {
-            // Safety check - verify both form and error container exist
-            if (this.isDestroyed || !this.element || !this.errorContainer) {
+            if (!this.element || !this.errorContainer) {
+                console.error('Error container or form element is missing');
                 return;
             }
-            
+
             try {
                 if (msg === false) {
                     // Clearing error
-                    this.errorContainer.classList.add('d-none');
-                    this.errorContainer.textContent = '';
-                    if (this.element) {
-                        this.element.classList.remove('text-danger', 'is-invalid');
-                    }
+                    this.clearError();
                 } else {
                     // Showing error
                     this.errorContainer.classList.remove('d-none');
                     this.errorContainer.textContent = msg;
-                    if (this.element) {
-                        this.element.classList.add('text-danger', 'is-invalid');
-                    }
+                    this.errorContainer.style.display = 'block';
+                    this.element.classList.add('text-danger');
+                    this.hasError = true;
+
+                    console.log('Form error displayed:', msg);
                 }
             } catch (e) {
-                console.debug('Error updating form error state:', e);
+                console.error('Error while updating error display:', e);
             }
         }
-        
-        // Handle form hide event
+
         onHide() {
-            // Reset submission state when form is hidden
-            this.isSubmitting = false;
+            if (!this.isDestroyed) {
+                this.clearError();
+            }
         }
-        
-        // Clean up resources when destroying the form
+
         destroy() {
+            if (this.isDestroyed) return;
+
             this.isDestroyed = true;
-            this.isSubmitting = false;
-            
+            console.log('Form destroy called');
+
             // Remove event listeners
             if (this.element) {
-                // Remove all submit handlers
-                this.submitHandlers.forEach(handler => {
-                    this.element.removeEventListener('submit', handler);
-                });
-                
-                // Find and remove cancel button handler
-                const cancelButton = this.element.querySelector('.editable-cancel');
-                if (cancelButton && this.cancelHandler) {
-                    cancelButton.removeEventListener('click', this.cancelHandler);
+                if (this._submitHandler) {
+                    this.element.removeEventListener('submit', this._submitHandler);
                 }
             }
-            
-            // Clear all handlers arrays
-            this.submitHandlers = [];
-            
-            // Clear references
+
+            if (this.cancelButton && this._cancelHandler) {
+                this.cancelButton.removeEventListener('click', this._cancelHandler);
+            }
+
+            // Clear references to DOM elements
+            if (this.element && this.element.parentNode) {
+                this.element.parentNode.removeChild(this.element);
+            }
+
+            // Clear all references
             this.element = null;
             this.errorContainer = null;
-            this.cancelHandler = null;
-            this.submitHandler = null;
+            this.submitButton = null;
+            this.cancelButton = null;
+            this._submitHandler = null;
+            this._cancelHandler = null;
+
+            // Don't null out the editable reference as it might still need this instance
+        }
+        
+        cleanup() {
+            // Clear error display
+            this.clearError();
+
+            // Remove event listeners
+            if (this.element) {
+                if (this._submitHandler) {
+                    this.element.removeEventListener('submit', this._submitHandler);
+                }
+            }
+
+            if (this.cancelButton && this._cancelHandler) {
+                this.cancelButton.removeEventListener('click', this._cancelHandler);
+            }
+
+            // Clear DOM elements but don't remove from DOM yet
+            if (this.element) {
+                this.element.innerHTML = '';
+            }
+
+            // Clear references to button elements
+            this.submitButton = null;
+            this.cancelButton = null;
+            this.errorContainer = null;
+
+            console.log('Form cleaned up (not destroyed)');
         }
     }
 
@@ -780,9 +746,9 @@
      * Base Input class
      */
     class AbstractInput {
-        constructor(editable) {
+        constructor(editable, options) {
             this.editable = editable;
-            this.options = editable.options;
+            this.options = options || {};
             this.isDestroyed = false;
             this.init();
         }
@@ -854,17 +820,40 @@
             // To be implemented by child classes
         }
         
+        setupBlurHandler() {
+            if (!this.input || this.options.onblur !== 'submit') {
+                return;
+            }
+
+            this._blurHandler = () => {
+                // Small delay to allow other events to complete
+                setTimeout(() => {
+                    // Don't submit if we've lost focus because the form is being hidden
+                    if (this.isDestroyed || !this.editable || !this.editable.form) {
+                        return;
+                    }
+
+                    // Clear any existing errors
+                    if (typeof this.editable.form.clearError === 'function') {
+                        this.editable.form.clearError();
+                    }
+
+                    // Submit the form
+                    if (typeof this.editable.form.submit === 'function') {
+                        this.editable.form.submit();
+                    }
+                }, 100);
+            };
+
+            this.input.addEventListener('blur', this._blurHandler);
+        }
+
         destroy() {
             this.isDestroyed = true;
-            
-            // Remove event listeners if needed
-            if (this.input) {
-                // Child classes may need to override this to remove specific listeners
-            }
-            
-            // Clear references
-            this.input = null;
+
+            // Basic cleanup - specific input types should override and call super.destroy()
             this.element = null;
+            this.input = null;
         }
     }
     
@@ -882,7 +871,6 @@
             this.init();
         }
         
-        // Add common event handlers setup
         setupEventHandlers() {
             // Setup outside click handler
             this.outsideClickHandler = (e) => {
@@ -953,14 +941,12 @@
             document.addEventListener('keydown', this.enterKeyHandler, true);
         }
         
-        // Helper method to check if container is visible
         isVisible() {
             return !this.isDestroyed && this.element &&
                 (this.element.style.display === 'block' ||
                  this.element.classList.contains('show'));
         }
         
-        // Clean up event handlers
         removeEventHandlers() {
             if (this.outsideClickHandler) {
                 document.removeEventListener('mousedown', this.outsideClickHandler);
@@ -978,7 +964,6 @@
             }
         }
         
-        // Method to be called on destroy
         destroy() {
             this.isDestroyed = true;
             this.removeEventHandlers();
@@ -998,7 +983,11 @@
         }
         
         hide() {
-            // To be implemented by child classes
+            // Basic implementation - to be overridden by child classes
+            if (this.editable && this.editable.form && 
+                typeof this.editable.form.onHide === 'function') {
+                this.editable.form.onHide();
+            }
         }
         
         setContent(content) {
@@ -1029,6 +1018,10 @@
         
         hideLoading() {
             // To be implemented by child classes
+        }
+        
+        emptyContent() {
+            // Abstract method to be implemented by subclasses
         }
     }
 
@@ -1089,16 +1082,52 @@
             this.element.classList.add('bs-popover-auto', 'show');
         }
         
-                hide() {
-            if (this.isDestroyed) return;
-            
-            this.element.classList.remove('show');
-            
-            // Notify form about hiding
-            if (this.editable && this.editable.form && 
-                typeof this.editable.form.onHide === 'function') {
-                this.editable.form.onHide();
+        emptyContent() {
+            if (this.body) {
+                this.body.innerHTML = '';
             }
+        }
+        
+        hide() {
+            if (!this.element) return;
+
+            this.element.classList.remove('show');
+
+            // Notify the form
+            if (this.editable && this.editable.form && 
+                typeof this.editable.form.clearError === 'function') {
+                this.editable.form.clearError();
+            }
+        }
+
+        removeFromDOM() {
+            if (this.isDestroyed || !this.element) return;
+
+            if (this.element.parentNode) {
+                this.element.parentNode.removeChild(this.element);
+                console.log('Popover container removed from DOM');
+            }
+        }
+
+        destroy() {
+            // Only use for complete removal
+            if (this.element && this.element.parentNode) {
+                this.element.parentNode.removeChild(this.element);
+            }
+
+            // Remove event listeners
+            window.removeEventListener('resize', this._resizeHandler);
+            window.removeEventListener('scroll', this._scrollHandler);
+            document.removeEventListener('mousedown', this._outsideClickHandler);
+
+            // Nullify references
+            this.element = null;
+            this.body = null;
+            this.arrow = null;
+            this.loading = null;
+            this._resizeHandler = null;
+            this._scrollHandler = null;
+            this._outsideClickHandler = null;
         }
         
         setContent(content) {
@@ -1270,6 +1299,15 @@
                 console.error('Error setting popover position:', e);
             }
         }
+        
+        cleanup() {
+            // Just clean the content, don't remove the container
+            if (this.body) {
+                this.body.innerHTML = '';
+            }
+
+            console.log('Container content cleaned up');
+        }
     }
 
     /**
@@ -1313,21 +1351,35 @@
             this.element.style.display = 'block';
         }
         
-        hide() {
-            if (this.isDestroyed || !this.element || !this.editable || !this.editable.element) {
-                return;
+        emptyContent() {
+            if (this.element) {
+                this.element.innerHTML = '';
             }
-            
+        }
+        
+        hide() {
+            if (!this.element || !this.editable || !this.editable.element) return;
+
             // Show the editable element
             this.editable.element.style.display = '';
-            
-            // Hide container
+
+            // Hide the container
             this.element.style.display = 'none';
-            
-            // Notify form about hiding
-            if (this.editable.form && typeof this.editable.form.onHide === 'function') {
-                this.editable.form.onHide();
+
+            // Notify the form
+            if (this.editable.form && typeof this.editable.form.clearError === 'function') {
+                this.editable.form.clearError();
             }
+        }
+
+        destroy() {
+            // Only use for complete removal
+            if (this.element && this.element.parentNode) {
+                this.element.parentNode.removeChild(this.element);
+            }
+
+            this.element = null;
+            this.loading = null;
         }
         
         setContent(content) {
@@ -1386,6 +1438,15 @@
             if (form) {
                 form.style.visibility = 'visible';
             }*/
+        }
+        
+        cleanup() {
+            // Just clean the content
+            if (this.element) {
+                this.element.innerHTML = '';
+            }
+
+            console.log('Inline container content cleaned up');
         }
     }
 
@@ -1479,49 +1540,73 @@
         }
         
         autosubmit() {
-            if (this.isDestroyed || !this.input || !this.options.autosubmit) {
+            if (!this.input || !this.options.autosubmit) {
                 return;
             }
-            
+
             // Create handler with proper binding
             this._submitHandler = (e) => {
                 if (e.key === 'Enter') {
+                    // Clear any existing errors
+                    if (this.editable && this.editable.form && 
+                        typeof this.editable.form.clearError === 'function') {
+                        this.editable.form.clearError();
+                    }
+
+                    // Submit the form
                     if (this.editable && this.editable.form && 
                         typeof this.editable.form.submit === 'function') {
                         this.editable.form.submit();
                     }
                 }
             };
-            
+
             // Add event listener
             this.input.addEventListener('keydown', this._submitHandler);
+
+            // Handle blur event if onblur option is set to 'submit'
+            if (this.options.onblur === 'submit') {
+                this._blurHandler = () => {
+                    // Small delay to allow other events to complete
+                    setTimeout(() => {
+                        // Don't submit if we've lost focus because the form is being hidden
+                        if (this.isDestroyed || !this.editable || !this.editable.form) {
+                            return;
+                        }
+
+                        // Clear any existing errors
+                        if (typeof this.editable.form.clearError === 'function') {
+                            this.editable.form.clearError();
+                        }
+
+                        // Submit the form
+                        if (typeof this.editable.form.submit === 'function') {
+                            this.editable.form.submit();
+                        }
+                    }, 100);
+                };
+
+                this.input.addEventListener('blur', this._blurHandler);
+            }
         }
-        
+
         destroy() {
-            // Remove event listeners before calling super
+            // Remove event listeners
             if (this.input) {
-                if (this._inputHandler) {
-                    this.input.removeEventListener('input', this._inputHandler);
-                }
                 if (this._submitHandler) {
                     this.input.removeEventListener('keydown', this._submitHandler);
                 }
+                if (this._blurHandler) {
+                    this.input.removeEventListener('blur', this._blurHandler);
+                }
             }
-            
-            if (this.clearButton && this._clearHandler) {
-                this.clearButton.removeEventListener('click', this._clearHandler);
-            }
-            
+
+            // Clear handler references
+            this._submitHandler = null;
+            this._blurHandler = null;
+
             // Call parent destroy
             super.destroy();
-            
-            // Clear button reference
-            this.clearButton = null;
-            
-            // Clear handler references
-            this._inputHandler = null;
-            this._clearHandler = null;
-            this._submitHandler = null;
         }
     }
 
@@ -1554,35 +1639,76 @@
         }
         
         autosubmit() {
-            if (this.isDestroyed || !this.input || !this.options.autosubmit) {
+            if (!this.input || !this.options.autosubmit) {
                 return;
             }
-            
+
             // Create handler with proper binding
             this._submitHandler = (e) => {
+                // CTRL+Enter submits the form for textarea
                 if (e.key === 'Enter' && e.ctrlKey) {
+                    e.preventDefault(); // Prevent newline
+
+                    // Clear any existing errors
+                    if (this.editable && this.editable.form && 
+                        typeof this.editable.form.clearError === 'function') {
+                        this.editable.form.clearError();
+                    }
+
+                    // Submit the form
                     if (this.editable && this.editable.form && 
                         typeof this.editable.form.submit === 'function') {
                         this.editable.form.submit();
                     }
                 }
             };
-            
+
             // Add event listener
             this.input.addEventListener('keydown', this._submitHandler);
-        }
-        
-        destroy() {
-            // Remove event listeners before calling super
-            if (this.input && this._submitHandler) {
-                this.input.removeEventListener('keydown', this._submitHandler);
+
+            // Handle blur event if onblur option is set to 'submit'
+            if (this.options.onblur === 'submit') {
+                this._blurHandler = () => {
+                    // Small delay to allow other events to complete
+                    setTimeout(() => {
+                        // Don't submit if we've lost focus because the form is being hidden
+                        if (this.isDestroyed || !this.editable || !this.editable.form) {
+                            return;
+                        }
+
+                        // Clear any existing errors
+                        if (typeof this.editable.form.clearError === 'function') {
+                            this.editable.form.clearError();
+                        }
+
+                        // Submit the form
+                        if (typeof this.editable.form.submit === 'function') {
+                            this.editable.form.submit();
+                        }
+                    }, 100);
+                };
+
+                this.input.addEventListener('blur', this._blurHandler);
             }
-            
+        }
+
+        destroy() {
+            // Remove event listeners
+            if (this.input) {
+                if (this._submitHandler) {
+                    this.input.removeEventListener('keydown', this._submitHandler);
+                }
+                if (this._blurHandler) {
+                    this.input.removeEventListener('blur', this._blurHandler);
+                }
+            }
+
+            // Clear handler references
+            this._submitHandler = null;
+            this._blurHandler = null;
+
             // Call parent destroy
             super.destroy();
-            
-            // Clear handler reference
-            this._submitHandler = null;
         }
     }
 
@@ -1735,34 +1861,40 @@
         }
         
         autosubmit() {
-            if (this.isDestroyed || !this.input || !this.options.autosubmit) {
+            if (!this.input || !this.options.autosubmit) {
                 return;
             }
-            
-            // Create handler with proper binding
+
+            // Create handler with proper binding - submit on change
             this._changeHandler = () => {
+                // Clear any existing errors
+                if (this.editable && this.editable.form && 
+                    typeof this.editable.form.clearError === 'function') {
+                    this.editable.form.clearError();
+                }
+
+                // Submit the form
                 if (this.editable && this.editable.form && 
                     typeof this.editable.form.submit === 'function') {
                     this.editable.form.submit();
                 }
             };
-            
+
             // Add event listener
             this.input.addEventListener('change', this._changeHandler);
         }
-        
+
         destroy() {
-            // Remove event listeners before calling super
+            // Remove event listeners
             if (this.input && this._changeHandler) {
                 this.input.removeEventListener('change', this._changeHandler);
             }
-            
+
+            // Clear handler reference
+            this._changeHandler = null;
+
             // Call parent destroy
             super.destroy();
-            
-            // Clear references
-            this.sourceData = null;
-            this._changeHandler = null;
         }
     }
     
@@ -1968,13 +2100,41 @@
         }
 
         autosubmit() {
-            // Checklist doesn't typically auto-submit
+            if (!this.inputs || !this.inputs.length || !this.options.autosubmit) {
+                return;
+            }
+
+            // Create handler with proper binding
+            this._changeHandler = () => {
+                // Clear any existing errors
+                if (this.editable && this.editable.form && 
+                    typeof this.editable.form.clearError === 'function') {
+                    this.editable.form.clearError();
+                }
+
+                // Submit the form
+                if (this.editable && this.editable.form && 
+                    typeof this.editable.form.submit === 'function') {
+                    this.editable.form.submit();
+                }
+            };
+
+            // Add change event to each checkbox
+            this.inputs.forEach(input => {
+                input.addEventListener('change', this._changeHandler);
+            });
         }
 
         destroy() {
-            // Clear arrays
-            this.inputs = [];
-            this.sourceData = null;
+            // Remove event listeners from all inputs
+            if (this.inputs && this.inputs.length && this._changeHandler) {
+                this.inputs.forEach(input => {
+                    input.removeEventListener('change', this._changeHandler);
+                });
+            }
+
+            // Clear handler reference
+            this._changeHandler = null;
 
             // Call parent destroy
             super.destroy();
@@ -2069,25 +2229,70 @@
         }
 
         autosubmit() {
-            if (!this.input || !this.options.autosubmit) return;
+            if (!this.input || !this.options.autosubmit) {
+                return;
+            }
 
-            const handler = () => {
+            // Create handler with proper binding - submit on change
+            this._changeHandler = () => {
+                // Clear any existing errors
+                if (this.editable && this.editable.form && 
+                    typeof this.editable.form.clearError === 'function') {
+                    this.editable.form.clearError();
+                }
+
+                // Submit the form
                 if (this.editable && this.editable.form && 
                     typeof this.editable.form.submit === 'function') {
                     this.editable.form.submit();
                 }
             };
 
-            this.input.addEventListener('change', handler);
-            this._changeHandler = handler; // Store for cleanup
+            // Add event listener
+            this.input.addEventListener('change', this._changeHandler);
+
+            // Handle blur event if onblur option is set to 'submit'
+            if (this.options.onblur === 'submit') {
+                this._blurHandler = () => {
+                    // Small delay to allow other events to complete
+                    setTimeout(() => {
+                        // Don't submit if we've lost focus because the form is being hidden
+                        if (this.isDestroyed || !this.editable || !this.editable.form) {
+                            return;
+                        }
+
+                        // Clear any existing errors
+                        if (typeof this.editable.form.clearError === 'function') {
+                            this.editable.form.clearError();
+                        }
+
+                        // Submit the form
+                        if (typeof this.editable.form.submit === 'function') {
+                            this.editable.form.submit();
+                        }
+                    }, 100);
+                };
+
+                this.input.addEventListener('blur', this._blurHandler);
+            }
         }
 
         destroy() {
-            if (this.input && this._changeHandler) {
-                this.input.removeEventListener('change', this._changeHandler);
+            // Remove event listeners
+            if (this.input) {
+                if (this._changeHandler) {
+                    this.input.removeEventListener('change', this._changeHandler);
+                }
+                if (this._blurHandler) {
+                    this.input.removeEventListener('blur', this._blurHandler);
+                }
             }
 
+            // Clear handler references
             this._changeHandler = null;
+            this._blurHandler = null;
+
+            // Call parent destroy
             super.destroy();
         }
     }
@@ -2184,25 +2389,70 @@
         }
 
         autosubmit() {
-            if (!this.input || !this.options.autosubmit) return;
+            if (!this.input || !this.options.autosubmit) {
+                return;
+            }
 
-            const handler = () => {
+            // Create handler with proper binding - submit on change
+            this._changeHandler = () => {
+                // Clear any existing errors
+                if (this.editable && this.editable.form && 
+                    typeof this.editable.form.clearError === 'function') {
+                    this.editable.form.clearError();
+                }
+
+                // Submit the form
                 if (this.editable && this.editable.form && 
                     typeof this.editable.form.submit === 'function') {
                     this.editable.form.submit();
                 }
             };
 
-            this.input.addEventListener('change', handler);
-            this._changeHandler = handler; // Store for cleanup
+            // Add event listener
+            this.input.addEventListener('change', this._changeHandler);
+
+            // Handle blur event if onblur option is set to 'submit'
+            if (this.options.onblur === 'submit') {
+                this._blurHandler = () => {
+                    // Small delay to allow other events to complete
+                    setTimeout(() => {
+                        // Don't submit if we've lost focus because the form is being hidden
+                        if (this.isDestroyed || !this.editable || !this.editable.form) {
+                            return;
+                        }
+
+                        // Clear any existing errors
+                        if (typeof this.editable.form.clearError === 'function') {
+                            this.editable.form.clearError();
+                        }
+
+                        // Submit the form
+                        if (typeof this.editable.form.submit === 'function') {
+                            this.editable.form.submit();
+                        }
+                    }, 100);
+                };
+
+                this.input.addEventListener('blur', this._blurHandler);
+            }
         }
 
         destroy() {
-            if (this.input && this._changeHandler) {
-                this.input.removeEventListener('change', this._changeHandler);
+            // Remove event listeners
+            if (this.input) {
+                if (this._changeHandler) {
+                    this.input.removeEventListener('change', this._changeHandler);
+                }
+                if (this._blurHandler) {
+                    this.input.removeEventListener('blur', this._blurHandler);
+                }
             }
 
+            // Clear handler references
             this._changeHandler = null;
+            this._blurHandler = null;
+
+            // Call parent destroy
             super.destroy();
         }
     }
@@ -2230,25 +2480,72 @@
         }
 
         autosubmit() {
-            if (!this.input || !this.options.autosubmit) return;
+            if (!this.input || !this.options.autosubmit) {
+                return;
+            }
 
-            const handler = (e) => {
-                if (e.key === 'Enter' && this.editable && this.editable.form && 
-                    typeof this.editable.form.submit === 'function') {
-                    this.editable.form.submit();
+            // Create handler with proper binding
+            this._submitHandler = (e) => {
+                if (e.key === 'Enter') {
+                    // Clear any existing errors
+                    if (this.editable && this.editable.form && 
+                        typeof this.editable.form.clearError === 'function') {
+                        this.editable.form.clearError();
+                    }
+
+                    // Submit the form
+                    if (this.editable && this.editable.form && 
+                        typeof this.editable.form.submit === 'function') {
+                        this.editable.form.submit();
+                    }
                 }
             };
 
-            this.input.addEventListener('keydown', handler);
-            this._keydownHandler = handler; // Store for cleanup
+            // Add event listener
+            this.input.addEventListener('keydown', this._submitHandler);
+
+            // Handle blur event if onblur option is set to 'submit'
+            if (this.options.onblur === 'submit') {
+                this._blurHandler = () => {
+                    // Small delay to allow other events to complete
+                    setTimeout(() => {
+                        // Don't submit if we've lost focus because the form is being hidden
+                        if (this.isDestroyed || !this.editable || !this.editable.form) {
+                            return;
+                        }
+
+                        // Clear any existing errors
+                        if (typeof this.editable.form.clearError === 'function') {
+                            this.editable.form.clearError();
+                        }
+
+                        // Submit the form
+                        if (typeof this.editable.form.submit === 'function') {
+                            this.editable.form.submit();
+                        }
+                    }, 100);
+                };
+
+                this.input.addEventListener('blur', this._blurHandler);
+            }
         }
 
         destroy() {
-            if (this.input && this._keydownHandler) {
-                this.input.removeEventListener('keydown', this._keydownHandler);
+            // Remove event listeners
+            if (this.input) {
+                if (this._submitHandler) {
+                    this.input.removeEventListener('keydown', this._submitHandler);
+                }
+                if (this._blurHandler) {
+                    this.input.removeEventListener('blur', this._blurHandler);
+                }
             }
 
-            this._keydownHandler = null;
+            // Clear handler references
+            this._submitHandler = null;
+            this._blurHandler = null;
+
+            // Call parent destroy
             super.destroy();
         }
     }
@@ -2269,25 +2566,72 @@
         }
 
         autosubmit() {
-            if (!this.input || !this.options.autosubmit) return;
+            if (!this.input || !this.options.autosubmit) {
+                return;
+            }
 
-            const handler = (e) => {
-                if (e.key === 'Enter' && this.editable && this.editable.form && 
-                    typeof this.editable.form.submit === 'function') {
-                    this.editable.form.submit();
+            // Create handler with proper binding
+            this._submitHandler = (e) => {
+                if (e.key === 'Enter') {
+                    // Clear any existing errors
+                    if (this.editable && this.editable.form && 
+                        typeof this.editable.form.clearError === 'function') {
+                        this.editable.form.clearError();
+                    }
+
+                    // Submit the form
+                    if (this.editable && this.editable.form && 
+                        typeof this.editable.form.submit === 'function') {
+                        this.editable.form.submit();
+                    }
                 }
             };
 
-            this.input.addEventListener('keydown', handler);
-            this._keydownHandler = handler; // Store for cleanup
+            // Add event listener
+            this.input.addEventListener('keydown', this._submitHandler);
+
+            // Handle blur event if onblur option is set to 'submit'
+            if (this.options.onblur === 'submit') {
+                this._blurHandler = () => {
+                    // Small delay to allow other events to complete
+                    setTimeout(() => {
+                        // Don't submit if we've lost focus because the form is being hidden
+                        if (this.isDestroyed || !this.editable || !this.editable.form) {
+                            return;
+                        }
+
+                        // Clear any existing errors
+                        if (typeof this.editable.form.clearError === 'function') {
+                            this.editable.form.clearError();
+                        }
+
+                        // Submit the form
+                        if (typeof this.editable.form.submit === 'function') {
+                            this.editable.form.submit();
+                        }
+                    }, 100);
+                };
+
+                this.input.addEventListener('blur', this._blurHandler);
+            }
         }
 
         destroy() {
-            if (this.input && this._keydownHandler) {
-                this.input.removeEventListener('keydown', this._keydownHandler);
+            // Remove event listeners
+            if (this.input) {
+                if (this._submitHandler) {
+                    this.input.removeEventListener('keydown', this._submitHandler);
+                }
+                if (this._blurHandler) {
+                    this.input.removeEventListener('blur', this._blurHandler);
+                }
             }
 
-            this._keydownHandler = null;
+            // Clear handler references
+            this._submitHandler = null;
+            this._blurHandler = null;
+
+            // Call parent destroy
             super.destroy();
         }
     }
@@ -2308,25 +2652,72 @@
         }
 
         autosubmit() {
-            if (!this.input || !this.options.autosubmit) return;
+            if (!this.input || !this.options.autosubmit) {
+                return;
+            }
 
-            const handler = (e) => {
-                if (e.key === 'Enter' && this.editable && this.editable.form && 
-                    typeof this.editable.form.submit === 'function') {
-                    this.editable.form.submit();
+            // Create handler with proper binding
+            this._submitHandler = (e) => {
+                if (e.key === 'Enter') {
+                    // Clear any existing errors
+                    if (this.editable && this.editable.form && 
+                        typeof this.editable.form.clearError === 'function') {
+                        this.editable.form.clearError();
+                    }
+
+                    // Submit the form
+                    if (this.editable && this.editable.form && 
+                        typeof this.editable.form.submit === 'function') {
+                        this.editable.form.submit();
+                    }
                 }
             };
 
-            this.input.addEventListener('keydown', handler);
-            this._keydownHandler = handler; // Store for cleanup
+            // Add event listener
+            this.input.addEventListener('keydown', this._submitHandler);
+
+            // Handle blur event if onblur option is set to 'submit'
+            if (this.options.onblur === 'submit') {
+                this._blurHandler = () => {
+                    // Small delay to allow other events to complete
+                    setTimeout(() => {
+                        // Don't submit if we've lost focus because the form is being hidden
+                        if (this.isDestroyed || !this.editable || !this.editable.form) {
+                            return;
+                        }
+
+                        // Clear any existing errors
+                        if (typeof this.editable.form.clearError === 'function') {
+                            this.editable.form.clearError();
+                        }
+
+                        // Submit the form
+                        if (typeof this.editable.form.submit === 'function') {
+                            this.editable.form.submit();
+                        }
+                    }, 100);
+                };
+
+                this.input.addEventListener('blur', this._blurHandler);
+            }
         }
 
         destroy() {
-            if (this.input && this._keydownHandler) {
-                this.input.removeEventListener('keydown', this._keydownHandler);
+            // Remove event listeners
+            if (this.input) {
+                if (this._submitHandler) {
+                    this.input.removeEventListener('keydown', this._submitHandler);
+                }
+                if (this._blurHandler) {
+                    this.input.removeEventListener('blur', this._blurHandler);
+                }
             }
 
-            this._keydownHandler = null;
+            // Clear handler references
+            this._submitHandler = null;
+            this._blurHandler = null;
+
+            // Call parent destroy
             super.destroy();
         }
     }
@@ -2347,25 +2738,72 @@
         }
 
         autosubmit() {
-            if (!this.input || !this.options.autosubmit) return;
+            if (!this.input || !this.options.autosubmit) {
+                return;
+            }
 
-            const handler = (e) => {
-                if (e.key === 'Enter' && this.editable && this.editable.form && 
-                    typeof this.editable.form.submit === 'function') {
-                    this.editable.form.submit();
+            // Create handler with proper binding
+            this._submitHandler = (e) => {
+                if (e.key === 'Enter') {
+                    // Clear any existing errors
+                    if (this.editable && this.editable.form && 
+                        typeof this.editable.form.clearError === 'function') {
+                        this.editable.form.clearError();
+                    }
+
+                    // Submit the form
+                    if (this.editable && this.editable.form && 
+                        typeof this.editable.form.submit === 'function') {
+                        this.editable.form.submit();
+                    }
                 }
             };
 
-            this.input.addEventListener('keydown', handler);
-            this._keydownHandler = handler; // Store for cleanup
+            // Add event listener
+            this.input.addEventListener('keydown', this._submitHandler);
+
+            // Handle blur event if onblur option is set to 'submit'
+            if (this.options.onblur === 'submit') {
+                this._blurHandler = () => {
+                    // Small delay to allow other events to complete
+                    setTimeout(() => {
+                        // Don't submit if we've lost focus because the form is being hidden
+                        if (this.isDestroyed || !this.editable || !this.editable.form) {
+                            return;
+                        }
+
+                        // Clear any existing errors
+                        if (typeof this.editable.form.clearError === 'function') {
+                            this.editable.form.clearError();
+                        }
+
+                        // Submit the form
+                        if (typeof this.editable.form.submit === 'function') {
+                            this.editable.form.submit();
+                        }
+                    }, 100);
+                };
+
+                this.input.addEventListener('blur', this._blurHandler);
+            }
         }
 
         destroy() {
-            if (this.input && this._keydownHandler) {
-                this.input.removeEventListener('keydown', this._keydownHandler);
+            // Remove event listeners
+            if (this.input) {
+                if (this._submitHandler) {
+                    this.input.removeEventListener('keydown', this._submitHandler);
+                }
+                if (this._blurHandler) {
+                    this.input.removeEventListener('blur', this._blurHandler);
+                }
             }
 
-            this._keydownHandler = null;
+            // Clear handler references
+            this._submitHandler = null;
+            this._blurHandler = null;
+
+            // Call parent destroy
             super.destroy();
         }
     }
@@ -2405,25 +2843,96 @@
         }
 
         autosubmit() {
-            if (!this.input || !this.options.autosubmit) return;
+            if (!this.input || !this.options.autosubmit) {
+                return;
+            }
 
-            const handler = (e) => {
-                if (e.key === 'Enter' && this.editable && this.editable.form && 
-                    typeof this.editable.form.submit === 'function') {
-                    this.editable.form.submit();
+            // Create handlers with proper binding
+            this._submitHandler = (e) => {
+                if (e.key === 'Enter') {
+                    // Clear any existing errors
+                    if (this.editable && this.editable.form && 
+                        typeof this.editable.form.clearError === 'function') {
+                        this.editable.form.clearError();
+                    }
+
+                    // Submit the form
+                    if (this.editable && this.editable.form && 
+                        typeof this.editable.form.submit === 'function') {
+                        this.editable.form.submit();
+                    }
                 }
             };
 
-            this.input.addEventListener('keydown', handler);
-            this._keydownHandler = handler; // Store for cleanup
+            // Add event listeners
+            this.input.addEventListener('keydown', this._submitHandler);
+
+            // Also submit on change (when using up/down arrows or input controls)
+            this._changeHandler = () => {
+                // For number inputs, we may want a small delay to ensure value is settled
+                setTimeout(() => {
+                    // Clear any existing errors
+                    if (this.editable && this.editable.form && 
+                        typeof this.editable.form.clearError === 'function') {
+                        this.editable.form.clearError();
+                    }
+
+                    // Submit the form
+                    if (this.editable && this.editable.form && 
+                        typeof this.editable.form.submit === 'function') {
+                        this.editable.form.submit();
+                    }
+                }, 100);
+            };
+
+            this.input.addEventListener('change', this._changeHandler);
+
+            // Handle blur event if onblur option is set to 'submit'
+            if (this.options.onblur === 'submit') {
+                this._blurHandler = () => {
+                    // Small delay to allow other events to complete
+                    setTimeout(() => {
+                        // Don't submit if we've lost focus because the form is being hidden
+                        if (this.isDestroyed || !this.editable || !this.editable.form) {
+                            return;
+                        }
+
+                        // Clear any existing errors
+                        if (typeof this.editable.form.clearError === 'function') {
+                            this.editable.form.clearError();
+                        }
+
+                        // Submit the form
+                        if (typeof this.editable.form.submit === 'function') {
+                            this.editable.form.submit();
+                        }
+                    }, 100);
+                };
+
+                this.input.addEventListener('blur', this._blurHandler);
+            }
         }
 
         destroy() {
-            if (this.input && this._keydownHandler) {
-                this.input.removeEventListener('keydown', this._keydownHandler);
+            // Remove event listeners
+            if (this.input) {
+                if (this._submitHandler) {
+                    this.input.removeEventListener('keydown', this._submitHandler);
+                }
+                if (this._changeHandler) {
+                    this.input.removeEventListener('change', this._changeHandler);
+                }
+                if (this._blurHandler) {
+                    this.input.removeEventListener('blur', this._blurHandler);
+                }
             }
 
-            this._keydownHandler = null;
+            // Clear handler references
+            this._submitHandler = null;
+            this._changeHandler = null;
+            this._blurHandler = null;
+
+            // Call parent destroy
             super.destroy();
         }
     }
@@ -2493,35 +3002,70 @@
         }
 
         autosubmit() {
-            if (!this.input || !this.options.autosubmit) return;
+            if (!this.input || !this.options.autosubmit) {
+                return;
+            }
 
-            const handler = () => {
+            // For range input, submit when value changes (slider stops)
+            this._changeHandler = () => {
+                // Clear any existing errors
+                if (this.editable && this.editable.form && 
+                    typeof this.editable.form.clearError === 'function') {
+                    this.editable.form.clearError();
+                }
+
+                // Submit the form
                 if (this.editable && this.editable.form && 
                     typeof this.editable.form.submit === 'function') {
                     this.editable.form.submit();
                 }
             };
 
-            this.input.addEventListener('change', handler);
-            this._changeHandler = handler; // Store for cleanup
+            // Add event listener - 'change' fires when slider stops
+            this.input.addEventListener('change', this._changeHandler);
+
+            // Handle blur event if onblur option is set to 'submit'
+            if (this.options.onblur === 'submit') {
+                this._blurHandler = () => {
+                    // Small delay to allow other events to complete
+                    setTimeout(() => {
+                        // Don't submit if we've lost focus because the form is being hidden
+                        if (this.isDestroyed || !this.editable || !this.editable.form) {
+                            return;
+                        }
+
+                        // Clear any existing errors
+                        if (typeof this.editable.form.clearError === 'function') {
+                            this.editable.form.clearError();
+                        }
+
+                        // Submit the form
+                        if (typeof this.editable.form.submit === 'function') {
+                            this.editable.form.submit();
+                        }
+                    }, 100);
+                };
+
+                this.input.addEventListener('blur', this._blurHandler);
+            }
         }
 
         destroy() {
+            // Remove event listeners
             if (this.input) {
-                if (this._inputHandler) {
-                    this.input.removeEventListener('input', this._inputHandler);
-                }
-
                 if (this._changeHandler) {
                     this.input.removeEventListener('change', this._changeHandler);
                 }
+                if (this._blurHandler) {
+                    this.input.removeEventListener('blur', this._blurHandler);
+                }
             }
 
-            this._inputHandler = null;
+            // Clear handler references
             this._changeHandler = null;
-            this.output = null;
-            this.rangeContainer = null;
+            this._blurHandler = null;
 
+            // Call parent destroy
             super.destroy();
         }
     }
