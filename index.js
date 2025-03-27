@@ -1796,40 +1796,221 @@
     }
 
     /**
-     * Textarea Input
+     * Enhanced TextareaInput with HTML WYSIWYG editing capability
      */
     class TextareaInput extends AbstractInput {
         init() {
             super.init();
 
-            // Create textarea element
-            this.input = document.createElement('textarea');
-            this.input.className = 'form-control';
+            // Create wrapper container
+            this.editorWrapper = document.createElement('div');
+            this.editorWrapper.className = 'html-editor-wrapper border rounded';
 
-            if (this.options.placeholder) {
-                this.input.placeholder = this.options.placeholder;
+            // Create contenteditable div instead of textarea
+            this.input = document.createElement('div');
+            this.input.className = 'form-control html-editor border-0';
+            this.input.contentEditable = 'true';
+            this.input.style.minHeight = '120px';
+            this.input.style.padding = '0.375rem 0.75rem';
+            this.input.style.overflow = 'auto';
+
+            // Optional toolbar for basic formatting
+            if (this.options.showToolbar !== false) {
+                this.toolbar = document.createElement('div');
+                this.toolbar.className = 'btn-toolbar bg-light p-1 border-bottom';
+
+                // Using the provided toolbar HTML
+                this.toolbar.innerHTML = `
+                    <div class="btn-group me-2">
+                        <button type="button" data-command="bold" class="btn btn-icon btn-sm btn-outline-secondary">
+                            <i class="ki-duotone ki-text-bold fs-1">
+                                <span class="path1"></span>
+                                <span class="path2"></span>
+                                <span class="path3"></span>
+                            </i>
+                        </button>
+                        <button type="button" data-command="italic" class="btn btn-icon btn-sm btn-outline-secondary">
+                            <i class="ki-duotone ki-text-italic fs-1">
+                                 <span class="path1"></span>
+                                 <span class="path2"></span>
+                                 <span class="path3"></span>
+                                 <span class="path4"></span>
+                            </i>
+                        </button>
+                        <button type="button" data-command="underline" class="btn btn-icon btn-sm btn-outline-secondary">
+                            <i class="ki-duotone ki-text-underline fs-1">
+                                 <span class="path1"></span>
+                                 <span class="path2"></span>
+                                 <span class="path3"></span>
+                            </i>
+                        </button>
+                    </div>
+                    <div class="btn-group me-2">
+                        <button type="button" data-command="insertUnorderedList" class="btn btn-icon btn-sm btn-outline-secondary">
+                            <i class="ki-duotone ki-text-circle fs-1">
+                                 <span class="path1"></span>
+                                 <span class="path2"></span>
+                                 <span class="path3"></span>
+                                 <span class="path4"></span>
+                                 <span class="path5"></span>
+                                 <span class="path6"></span>
+                            </i>
+                        </button>
+                        <button type="button" data-command="insertOrderedList" class="btn btn-icon btn-sm btn-outline-secondary">
+                            <i class="ki-duotone ki-text-number fs-1">
+                                 <span class="path1"></span>
+                                 <span class="path2"></span>
+                                 <span class="path3"></span>
+                                 <span class="path4"></span>
+                                 <span class="path5"></span>
+                                 <span class="path6"></span>
+                            </i>
+                        </button>
+                    </div>
+                `;
+
+                // Setup toolbar event handlers
+                this._setupToolbar();
+
+                this.editorWrapper.appendChild(this.toolbar);
             }
 
+            // Append editor to wrapper
+            this.editorWrapper.appendChild(this.input);
+
+            // Append wrapper to container
+            this.element.appendChild(this.editorWrapper);
+
+            // Style adjustments
             if (this.options.rows) {
-                this.input.rows = this.options.rows;
-            } else {
-                this.input.rows = 7;
+                this.input.style.minHeight = `${this.options.rows * 1.5}rem`;
             }
 
-            // Append textarea to container
-            this.element.appendChild(this.input);
+            // Set placeholder if specified
+            if (this.options.placeholder) {
+                this.input.dataset.placeholder = this.options.placeholder;
+
+                // Apply placeholder style when empty
+                if (!this.input.innerHTML) {
+                    this.input.classList.add('empty');
+                }
+
+                // Add CSS for placeholder
+                const style = document.createElement('style');
+                style.textContent = `
+                    [contenteditable=true].empty:before {
+                        content: attr(data-placeholder);
+                        color: #6c757d;
+                        font-style: italic;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            // Log initialization with current timestamp
+            console.log(`WYSIWYG editor initialized at 2025-03-27 06:14:34 by CashEncode`);
         }
-        
+
+        _setupToolbar() {
+            if (!this.toolbar) return;
+
+            const buttons = this.toolbar.querySelectorAll('button[data-command]');
+
+            // Add click handlers to each button
+            buttons.forEach(button => {
+                const clickHandler = (e) => {
+                    e.preventDefault();
+                    const command = button.getAttribute('data-command');
+
+                    // Execute the command
+                    document.execCommand(command, false, null);
+
+                    // Keep focus on editor
+                    this.input.focus();
+                };
+
+                // Store reference to handler for cleanup
+                button._clickHandler = clickHandler;
+                button.addEventListener('click', clickHandler);
+            });
+        }
+
+        // Convert value to HTML for display in the editable element
+        value2html(value) {
+            if (value === null || value === undefined || value === '') {
+                return '';
+            }
+
+            // Return HTML for display
+            return String(value);
+        }
+
+        // Extract value from HTML
+        html2value(html) {
+            return html; // Return as is
+        }
+
+        // Set HTML content in editor
+        value2input(value) {
+            if (!this.isDestroyed && this.input) {
+                if (value === null || value === undefined || value === '') {
+                    this.input.innerHTML = '';
+                    if (this.options.placeholder) {
+                        this.input.classList.add('empty');
+                    }
+                    return;
+                }
+
+                // Set the HTML content directly
+                this.input.innerHTML = String(value);
+                if (this.options.placeholder) {
+                    this.input.classList.remove('empty');
+                }
+            }
+        }
+
+        // Get HTML content from editor
+        input2value() {
+            if (this.isDestroyed || !this.input) {
+                return null;
+            }
+
+            // Return the HTML content
+            return this.input.innerHTML;
+        }
+
+        // Handle focus events for placeholder
+        activate() {
+            if (!this.isDestroyed && this.input) {
+                // Focus on input
+                this.input.focus();
+
+                // Add input handler for placeholder support
+                if (!this._inputHandler && this.options.placeholder) {
+                    this._inputHandler = () => {
+                        if (this.input.innerHTML === '') {
+                            this.input.classList.add('empty');
+                        } else {
+                            this.input.classList.remove('empty');
+                        }
+                    };
+
+                    this.input.addEventListener('input', this._inputHandler);
+                }
+            }
+        }
+
+        // Override autosubmit to work with contenteditable
         autosubmit() {
             if (!this.input || !this.options.autosubmit) {
                 return;
             }
 
-            // Create handler with proper binding
+            // Create handler for CTRL+Enter
             this._keydownHandler = (e) => {
-                // CTRL+Enter submits the form for textarea
+                // CTRL+Enter submits the form
                 if (e.key === 'Enter' && e.ctrlKey) {
-                    e.preventDefault(); // Prevent newline
+                    e.preventDefault(); // Prevent new line
 
                     // Clear any existing errors
                     if (this.editable && this.editable.form && 
@@ -1873,26 +2054,33 @@
                 this.input.addEventListener('blur', this._blurHandler);
             }
 
-            console.log(`TextareaInput autosubmit setup at ${this.timestamp} by ${this.user}`);
+            console.log(`WYSIWYG TextareaInput autosubmit setup at 2025-03-27 06:14:34 by CashEncode`);
         }
 
-        destroy() {
-            // Remove event listeners
-            if (this.input) {
-                if (this._keydownHandler) {
-                    this.input.removeEventListener('keydown', this._keydownHandler);
-                }
-                if (this._blurHandler) {
-                    this.input.removeEventListener('blur', this._blurHandler);
-                }
+        // Override removeTypeSpecificListeners to clean up editor-specific handlers
+        removeTypeSpecificListeners() {
+            // Remove toolbar button event listeners
+            if (this.toolbar) {
+                const buttons = this.toolbar.querySelectorAll('button[data-command]');
+                buttons.forEach(button => {
+                    if (button._clickHandler) {
+                        button.removeEventListener('click', button._clickHandler);
+                        button._clickHandler = null;
+                    }
+                });
             }
+        }
 
-            // Clear handler references
-            this._keydownHandler = null;
-            this._blurHandler = null;
-
-            // Call parent destroy
+        // Enhanced destroy to clean up all handlers
+        destroy() {
+            // Call parent destroy which handles common event listeners and calls removeTypeSpecificListeners
             super.destroy();
+
+            // Clean up any remaining elements
+            this.toolbar = null;
+            this.editorWrapper = null;
+
+            console.log(`WYSIWYG TextareaInput destroyed at 2025-03-27 06:14:34 by CashEncode`);
         }
     }
 
