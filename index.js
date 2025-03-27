@@ -143,7 +143,7 @@
             // Trigger shown event
             this.triggerEvent('shown');
 
-            console.log(`Editable shown at ${this.options.timestamp} by ${this.options.user}`);
+            console.log(`Editable shown at ${getCurrentTimestamp()} by ${this.options.user}`);
         }
 
         _createContainer() {
@@ -760,11 +760,18 @@
             // Clear error display
             this.clearError();
 
-            // Remove event listeners
+            // Remove event listeners - WRONG
             if (this.element) {
                 if (this._keydownHandler) {
                     this.input.removeEventListener('keydown', this._keydownHandler);
                 }
+            }
+
+            // CORRECT Version:
+            // EditableForm doesn't directly have input elements with keydown handlers
+            // Just focus on cleaning up its own handlers
+            if (this.element && this._submitHandler) {
+                this.element.removeEventListener('submit', this._submitHandler);
             }
 
             if (this.cancelButton && this._cancelHandler) {
@@ -781,7 +788,7 @@
             this.cancelButton = null;
             this.errorContainer = null;
 
-            console.log('Form cleaned up (not destroyed)');
+            console.log(`Form cleaned up at ${getCurrentTimestamp()} by ${CURRENT_USER}`);
         }
     }
 
@@ -1844,7 +1851,7 @@
             }
 
             // Clear handler references
-            this._submitHandler = null;
+            this._keydownHandler = null;
             this._blurHandler = null;
 
             // Call parent destroy
@@ -2691,7 +2698,7 @@
             }
 
             // Clear handler references
-            this._submitHandler = null;
+            this._keydownHandler = null;
             this._blurHandler = null;
 
             // Call parent destroy
@@ -3085,7 +3092,7 @@
             }
 
             // Clear handler references
-            this._submitHandler = null;
+            this._keydownHandler = null;
             this._changeHandler = null;
             this._blurHandler = null;
 
