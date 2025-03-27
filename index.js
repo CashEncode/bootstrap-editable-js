@@ -149,7 +149,33 @@
                 case 'select':
                     this.input = new SelectInput(this, this.options);
                     break;
-                // Add other input types as needed
+                case 'password':
+                    this.input = new PasswordInput(this, this.options);
+                    break;
+                case 'email':
+                    this.input = new EmailInput(this, this.options);
+                    break;
+                case 'url':
+                    this.input = new UrlInput(this, this.options);
+                    break;
+                case 'tel':
+                    this.input = new TelInput(this, this.options);
+                    break;
+                case 'number':
+                    this.input = new NumberInput(this, this.options);
+                    break;
+                case 'range':
+                    this.input = new RangeInput(this, this.options);
+                    break;
+                case 'date':
+                    this.input = new DateInput(this, this.options);
+                    break;
+                case 'datetime-local':
+                    this.input = new DateTimeInput(this, this.options);
+                    break;
+                case 'checklist':
+                    this.input = new ChecklistInput(this, this.options);
+                    break;
                 default:
                     this.input = new TextInput(this, this.options);
             }
@@ -176,10 +202,7 @@
 
             console.log(`Editable hidden at ${this.options.timestamp} by ${this.options.user}`);
         }
-
-        /**
-         * Soft cleanup that preserves the editable functionality
-         */
+        
         softCleanup() {
             console.log(`Soft cleanup at ${this.options.timestamp} by ${this.options.user}`);
 
@@ -427,7 +450,6 @@
             }
         }
 
-        // Trigger custom event
         triggerEvent(eventName, data = {}) {
             if (!this.element) return;
 
@@ -443,7 +465,6 @@
             this.element.dispatchEvent(event);
         }
 
-        // Full destroy - use only when completely removing the editable
         destroy() {
             console.log(`Editable destroyed at ${this.options.timestamp} by ${this.options.user}`);
 
@@ -482,6 +503,7 @@
             this.options = editable ? editable.options : {};
             this.input = editable ? editable.input : null;
             this.hasError = false;
+            this.isDestroyed = false;
 
             // Explicitly bind methods
             this.submit = this.submit.bind(this);
@@ -750,6 +772,21 @@
             this.editable = editable;
             this.options = options || {};
             this.isDestroyed = false;
+
+            // Event handler references - initialized as null
+            this._submitHandler = null;
+            this._blurHandler = null;
+            this._inputHandler = null;
+            this._changeHandler = null;
+            this._focusHandler = null;
+            this._clearHandler = null;
+            this._keyupHandler = null;
+            this._keydownHandler = null;
+
+            // Timestamp and user for logging
+            this.timestamp = '2025-03-27 03:33:16';
+            this.user = 'CashEncode';
+
             this.init();
         }
         
@@ -849,11 +886,67 @@
         }
 
         destroy() {
-            this.isDestroyed = true;
+            if (this.isDestroyed) return;
 
-            // Basic cleanup - specific input types should override and call super.destroy()
+            this.isDestroyed = true;
+            console.log(`Input destroyed at ${this.timestamp} by ${this.user}`);
+
+            // Remove all event listeners
+            this.removeAllEventListeners();
+
+            // Clear DOM references
             this.element = null;
             this.input = null;
+            this.clearButton = null;
+
+            // Other type-specific elements
+            this.output = null;
+            this.rangeContainer = null;
+        }
+        
+        removeAllEventListeners() {
+            // Only attempt to remove listeners if the input element exists
+            if (this.input) {
+                // Common event types
+                const eventTypes = [
+                    { type: 'submit', handler: this._submitHandler },
+                    { type: 'blur', handler: this._blurHandler },
+                    { type: 'input', handler: this._inputHandler },
+                    { type: 'change', handler: this._changeHandler },
+                    { type: 'focus', handler: this._focusHandler },
+                    { type: 'keyup', handler: this._keyupHandler },
+                    { type: 'keydown', handler: this._keydownHandler }
+                ];
+
+                // Remove all registered event listeners
+                eventTypes.forEach(({ type, handler }) => {
+                    if (handler) {
+                        this.input.removeEventListener(type, handler);
+                    }
+                });
+            }
+
+            // Remove clear button event listener if it exists
+            if (this.clearButton && this._clearHandler) {
+                this.clearButton.removeEventListener('click', this._clearHandler);
+            }
+
+            // Remove any other type-specific listeners
+            this.removeTypeSpecificListeners();
+
+            // Null out all event handler references
+            this._submitHandler = null;
+            this._blurHandler = null;
+            this._inputHandler = null;
+            this._changeHandler = null;
+            this._focusHandler = null;
+            this._clearHandler = null;
+            this._keyupHandler = null;
+            this._keydownHandler = null;
+        }
+        
+        removeTypeSpecificListeners() {
+            // To be implemented by specific input types
         }
     }
     
@@ -1456,28 +1549,23 @@
     class TextInput extends AbstractInput {
         init() {
             super.init();
-            
+
             // Create input element
             this.input = document.createElement('input');
             this.input.type = 'text';
             this.input.className = 'form-control';
-            
+
             if (this.options.placeholder) {
                 this.input.placeholder = this.options.placeholder;
             }
-            
+
             // Append input to container
             this.element.appendChild(this.input);
-            
+
             // Add clear button if needed
             if (this.options.clear !== false) {
                 this.createClearButton();
             }
-            
-            // Store event handlers for cleanup
-            this._inputHandler = null;
-            this._clearHandler = null;
-            this._submitHandler = null;
         }
         
         createClearButton() {
@@ -1490,18 +1578,18 @@
             this.clearButton.style.transform = 'translateY(-50%)';
             this.clearButton.style.cursor = 'pointer';
             this.clearButton.style.display = 'none';
-            
+
             // Make sure element has position for absolute positioning of clear button
             this.element.style.position = 'relative';
-            
+
             // Append clear button to container
             this.element.appendChild(this.clearButton);
-            
-            // Create handlers with proper binding
+
+            // Create handlers with proper binding and store references
             this._inputHandler = () => {
                 this.toggleClear();
             };
-            
+
             this._clearHandler = (e) => {
                 e.preventDefault();
                 this.clear();
@@ -1509,10 +1597,12 @@
                     this.input.focus();
                 }
             };
-            
+
             // Add event listeners
             this.input.addEventListener('input', this._inputHandler);
             this.clearButton.addEventListener('click', this._clearHandler);
+
+            console.log(`TextInput clear button created at ${this.timestamp} by ${this.user}`);
         }
         
         toggleClear() {
@@ -1545,7 +1635,7 @@
             }
 
             // Create handler with proper binding
-            this._submitHandler = (e) => {
+            this._keydownHandler = (e) => {
                 if (e.key === 'Enter') {
                     // Clear any existing errors
                     if (this.editable && this.editable.form && 
@@ -1562,7 +1652,7 @@
             };
 
             // Add event listener
-            this.input.addEventListener('keydown', this._submitHandler);
+            this.input.addEventListener('keydown', this._keydownHandler);
 
             // Handle blur event if onblur option is set to 'submit'
             if (this.options.onblur === 'submit') {
@@ -1588,6 +1678,8 @@
 
                 this.input.addEventListener('blur', this._blurHandler);
             }
+
+            console.log(`TextInput autosubmit setup at ${this.timestamp} by ${this.user}`);
         }
 
         destroy() {
@@ -1616,26 +1708,23 @@
     class TextareaInput extends AbstractInput {
         init() {
             super.init();
-            
+
             // Create textarea element
             this.input = document.createElement('textarea');
             this.input.className = 'form-control';
-            
+
             if (this.options.placeholder) {
                 this.input.placeholder = this.options.placeholder;
             }
-            
+
             if (this.options.rows) {
                 this.input.rows = this.options.rows;
             } else {
                 this.input.rows = 7;
             }
-            
+
             // Append textarea to container
             this.element.appendChild(this.input);
-            
-            // Store event handler for cleanup
-            this._submitHandler = null;
         }
         
         autosubmit() {
@@ -1644,7 +1733,7 @@
             }
 
             // Create handler with proper binding
-            this._submitHandler = (e) => {
+            this._keydownHandler = (e) => {
                 // CTRL+Enter submits the form for textarea
                 if (e.key === 'Enter' && e.ctrlKey) {
                     e.preventDefault(); // Prevent newline
@@ -1664,7 +1753,7 @@
             };
 
             // Add event listener
-            this.input.addEventListener('keydown', this._submitHandler);
+            this.input.addEventListener('keydown', this._keydownHandler);
 
             // Handle blur event if onblur option is set to 'submit'
             if (this.options.onblur === 'submit') {
@@ -1690,6 +1779,8 @@
 
                 this.input.addEventListener('blur', this._blurHandler);
             }
+
+            console.log(`TextareaInput autosubmit setup at ${this.timestamp} by ${this.user}`);
         }
 
         destroy() {
@@ -1718,19 +1809,16 @@
     class SelectInput extends AbstractInput {
         init() {
             super.init();
-            
+
             // Create select element
             this.input = document.createElement('select');
             this.input.className = 'form-select';
-            
+
             // Append select to container
             this.element.appendChild(this.input);
-            
+
             // Process source
             this.processSource();
-            
-            // Store event handler for cleanup
-            this._changeHandler = null;
         }
         
         async processSource() {
@@ -1882,6 +1970,8 @@
 
             // Add event listener
             this.input.addEventListener('change', this._changeHandler);
+
+            console.log(`SelectInput autosubmit setup at ${this.timestamp} by ${this.user}`);
         }
 
         destroy() {
@@ -2123,20 +2213,24 @@
             this.inputs.forEach(input => {
                 input.addEventListener('change', this._changeHandler);
             });
-        }
 
-        destroy() {
-            // Remove event listeners from all inputs
+            console.log(`ChecklistInput autosubmit setup at ${this.timestamp} by ${this.user}`);
+        }
+        
+        removeTypeSpecificListeners() {
+            // Remove change event from all checkbox inputs
             if (this.inputs && this.inputs.length && this._changeHandler) {
                 this.inputs.forEach(input => {
                     input.removeEventListener('change', this._changeHandler);
                 });
             }
 
-            // Clear handler reference
-            this._changeHandler = null;
+            // Clear inputs array
+            this.inputs = [];
+        }
 
-            // Call parent destroy
+        destroy() {
+            // Call parent destroy which calls removeAllEventListeners
             super.destroy();
         }
     }
@@ -2275,6 +2369,8 @@
 
                 this.input.addEventListener('blur', this._blurHandler);
             }
+
+            console.log(`DateInput autosubmit setup at ${this.timestamp} by ${this.user}`);
         }
 
         destroy() {
@@ -2435,6 +2531,8 @@
 
                 this.input.addEventListener('blur', this._blurHandler);
             }
+
+            console.log(`DateTimeInput autosubmit setup at ${this.timestamp} by ${this.user}`);
         }
 
         destroy() {
@@ -2485,7 +2583,7 @@
             }
 
             // Create handler with proper binding
-            this._submitHandler = (e) => {
+            this._keydownHandler = (e) => {
                 if (e.key === 'Enter') {
                     // Clear any existing errors
                     if (this.editable && this.editable.form && 
@@ -2502,7 +2600,7 @@
             };
 
             // Add event listener
-            this.input.addEventListener('keydown', this._submitHandler);
+            this.input.addEventListener('keydown', this._keydownHandler);
 
             // Handle blur event if onblur option is set to 'submit'
             if (this.options.onblur === 'submit') {
@@ -2528,6 +2626,8 @@
 
                 this.input.addEventListener('blur', this._blurHandler);
             }
+
+            console.log(`PasswordInput autosubmit setup at ${this.timestamp} by ${this.user}`);
         }
 
         destroy() {
@@ -2571,7 +2671,7 @@
             }
 
             // Create handler with proper binding
-            this._submitHandler = (e) => {
+            this._keydownHandler = (e) => {
                 if (e.key === 'Enter') {
                     // Clear any existing errors
                     if (this.editable && this.editable.form && 
@@ -2588,7 +2688,7 @@
             };
 
             // Add event listener
-            this.input.addEventListener('keydown', this._submitHandler);
+            this.input.addEventListener('keydown', this._keydownHandler);
 
             // Handle blur event if onblur option is set to 'submit'
             if (this.options.onblur === 'submit') {
@@ -2614,6 +2714,8 @@
 
                 this.input.addEventListener('blur', this._blurHandler);
             }
+
+            console.log(`EmailInput autosubmit setup at ${this.timestamp} by ${this.user}`);
         }
 
         destroy() {
@@ -2657,7 +2759,7 @@
             }
 
             // Create handler with proper binding
-            this._submitHandler = (e) => {
+            this._keydownHandler = (e) => {
                 if (e.key === 'Enter') {
                     // Clear any existing errors
                     if (this.editable && this.editable.form && 
@@ -2674,7 +2776,7 @@
             };
 
             // Add event listener
-            this.input.addEventListener('keydown', this._submitHandler);
+            this.input.addEventListener('keydown', this._keydownHandler);
 
             // Handle blur event if onblur option is set to 'submit'
             if (this.options.onblur === 'submit') {
@@ -2700,6 +2802,8 @@
 
                 this.input.addEventListener('blur', this._blurHandler);
             }
+
+            console.log(`UrlInput autosubmit setup at ${this.timestamp} by ${this.user}`);
         }
 
         destroy() {
@@ -2743,7 +2847,7 @@
             }
 
             // Create handler with proper binding
-            this._submitHandler = (e) => {
+            this._keydownHandler = (e) => {
                 if (e.key === 'Enter') {
                     // Clear any existing errors
                     if (this.editable && this.editable.form && 
@@ -2760,7 +2864,7 @@
             };
 
             // Add event listener
-            this.input.addEventListener('keydown', this._submitHandler);
+            this.input.addEventListener('keydown', this._keydownHandler);
 
             // Handle blur event if onblur option is set to 'submit'
             if (this.options.onblur === 'submit') {
@@ -2786,6 +2890,8 @@
 
                 this.input.addEventListener('blur', this._blurHandler);
             }
+
+            console.log(`TelInput autosubmit setup at ${this.timestamp} by ${this.user}`);
         }
 
         destroy() {
@@ -2848,7 +2954,7 @@
             }
 
             // Create handlers with proper binding
-            this._submitHandler = (e) => {
+            this._keydownHandler = (e) => {
                 if (e.key === 'Enter') {
                     // Clear any existing errors
                     if (this.editable && this.editable.form && 
@@ -2865,7 +2971,7 @@
             };
 
             // Add event listeners
-            this.input.addEventListener('keydown', this._submitHandler);
+            this.input.addEventListener('keydown', this._keydownHandler);
 
             // Also submit on change (when using up/down arrows or input controls)
             this._changeHandler = () => {
@@ -2911,6 +3017,8 @@
 
                 this.input.addEventListener('blur', this._blurHandler);
             }
+
+            console.log(`NumberInput autosubmit setup at ${this.timestamp} by ${this.user}`);
         }
 
         destroy() {
@@ -2970,17 +3078,16 @@
             this.element.appendChild(this.rangeContainer);
 
             // Update output when input changes
-            const updateOutput = () => {
+            this._inputHandler = () => {
                 if (this.output && this.input) {
                     this.output.textContent = this.input.value;
                 }
             };
 
-            this.input.addEventListener('input', updateOutput);
-            this._inputHandler = updateOutput; // Store for cleanup
+            this.input.addEventListener('input', this._inputHandler);
 
             // Initial update
-            updateOutput();
+            this._inputHandler();
         }
 
         value2input(value) {
@@ -3048,6 +3155,8 @@
 
                 this.input.addEventListener('blur', this._blurHandler);
             }
+
+            console.log(`RangeInput autosubmit setup at ${this.timestamp} by ${this.user}`);
         }
 
         destroy() {
