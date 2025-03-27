@@ -25,7 +25,8 @@
         emptytext: 'Empty',   // Text when value is empty
         savenochange: false,  // Save if value not changed
         autosubmit: false,    // Auto-submit when input changed
-        onblur: null,         // On blur behavior: 'cancel', 'submit', 'ignore'
+        onblur: 'submit',     // On blur behavior: 'cancel', 'submit', 'ignore'
+        enableEscape: true,   // Allow Escape key to close the editor
 
         // Cleanup options
         cleanupOnSave: true,    // Clean up DOM elements after successful save
@@ -65,6 +66,11 @@
                 ...defaults,
                 ...options
             };
+
+            // If no value provided in options, extract it from the element content
+            if (this.options.value === null && element) {
+                this.options.value = element.innerHTML || '';
+            }
 
             // Store current date and user for logging
             this.options.timestamp = getCurrentTimestamp();
@@ -125,22 +131,22 @@
                 this._createContainer();
             }
 
-            // Create form if needed
-            if (!this.form) {
-                this._createForm();
-            }
-
-            // Create input if needed
+            // Create input first (needs to be fully created before form)
             if (!this.input) {
                 this._createInput();
             }
 
-            // Show container
+            // Create form AFTER input is fully ready
+            if (!this.form) {
+                this._createForm();
+            }
+
+            // Now show container AFTER all content is prepared
             if (this.container) {
                 this.container.show();
             }
 
-            // Trigger shown event
+            // Trigger shown event 
             this.triggerEvent('shown');
 
             console.log(`Editable shown at ${getCurrentTimestamp()} by ${this.options.user}`);
@@ -158,6 +164,11 @@
         _createForm() {
             // Create form component
             this.form = new EditableForm(this);
+
+            // Ensure form is rendered immediately
+            if (this.form && typeof this.form.render === 'function') {
+                this.form.render();
+            }
         }
 
         _createInput() {
@@ -562,7 +573,13 @@
             if (this.options.showbuttons) {
                 // Create buttons container
                 const buttonsContainer = document.createElement('div');
-                buttonsContainer.className = 'd-flex justify-content-end m-3 me-0 mb-0 gap-1';
+
+                // Check button position
+                const buttonPosition = this.options.showbuttons === 'bottom' ? 
+                    'd-flex justify-content-end mt-3 mb-1 gap-1' : 
+                    'd-flex justify-content-end m-3 me-0 mb-0 gap-1';
+
+                buttonsContainer.className = buttonPosition;
 
                 // Submit button
                 const submitButton = document.createElement('button');
@@ -612,26 +629,12 @@
                 this.editable.container.setContent(this.element);
             }
 
-            // Store a reference to the instance
-            const formInstance = this;
-
-            // Add form submit handler with proper storage
-            this._submitHandler = function(e) {
-                e.preventDefault();
-                formInstance.submit();
-            };
-            this.element.addEventListener('submit', this._submitHandler);
-
-            // Set up autosubmit if no buttons are shown
-            if (!this.options.showbuttons && this.input) {
-                this.input.autosubmit();
-            }
-
-            // Set initial value
+            // Set initial value - CRITICAL PART
             const value = this.editable && this.editable.options ? 
                 (this.editable.options.value !== null ? 
                     this.editable.options.value : this.editable.options.defaultValue) : '';
 
+            // Explicitly set input value
             if (this.input && typeof this.input.value2input === 'function') {
                 this.input.value2input(value);
             }
@@ -1541,6 +1544,10 @@
         }
         
         setContent(content) {
+            if (this.loading) {
+                this.loading.classList.add('d-none');
+            }
+            
             if (this.isDestroyed || !this.element) {
                 return;
             }
