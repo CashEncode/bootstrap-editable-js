@@ -172,7 +172,7 @@
                 type: 'text',
                 title: 'Enter your name',
                 pk: 1,
-                url: '/api/update-profile',
+                url: 'response.php',
                 showbuttons: 'bottom',
                 placement: 'top',
                 validate: function(value) {
@@ -194,7 +194,7 @@
                 type: 'email',
                 title: 'Enter your email',
                 pk: 1,
-                url: '/api/update-profile',
+                url: 'response.php',
                 validate: function(value) {
                     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                     if (!emailRegex.test(value)) return 'Please enter a valid email address';
@@ -212,7 +212,7 @@
                 type: 'select',
                 title: 'Select status',
                 pk: 1,
-                url: '/api/update-profile',
+                url: 'response.php',
                 source: [
                     { value: 'active', text: 'Active' },
                     { value: 'inactive', text: 'Inactive' },
@@ -230,7 +230,7 @@
                 type: 'textarea',
                 title: 'Edit your bio',
                 pk: 1,
-                url: '/api/update-profile',
+                url: 'response.php',
                 rows: 4,
                 params: {
                     timestamp: timestamp,
@@ -244,7 +244,7 @@
                 type: 'date',
                 title: 'Enter your birth date',
                 pk: 1,
-                url: '/api/update-profile',
+                url: 'response.php',
                 params: {
                     timestamp: timestamp,
                     user: currentUser,
@@ -257,7 +257,7 @@
                 type: 'url',
                 title: 'Enter your website',
                 pk: 1,
-                url: '/api/update-profile',
+                url: 'response.php',
                 validate: function(value) {
                     try {
                         new URL(value);
@@ -279,7 +279,7 @@
                 mode: 'inline',
                 title: 'Edit product name',
                 pk: 101,
-                url: '/api/update-product',
+                url: 'response.php',
                 emptytext: 'Enter product name',
                 params: {
                     timestamp: timestamp,
@@ -294,7 +294,7 @@
                 mode: 'inline',
                 title: 'Edit price',
                 pk: 101,
-                url: '/api/update-product',
+                url: 'response.php',
                 validate: function(value) {
                     if (isNaN(value) || value <= 0) return 'Price must be a positive number';
                     return null;
@@ -312,7 +312,7 @@
                 mode: 'inline',
                 title: 'Edit description',
                 pk: 101,
-                url: '/api/update-product',
+                url: 'response.php',
                 rows: 3,
                 showbuttons: 'bottom',
                 params: {
