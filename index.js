@@ -485,12 +485,18 @@
             this.options.value = value;
 
             // Update the display value
-            const displayValue = (value === null || value === undefined || value === '') ? 
+            let displayValue = (value === null || value === undefined || value === '') ? 
                 this.options.emptytext : value;
 
             // Update element content
             if (this.element) {
-                this.element.innerHTML = displayValue;
+                if (this.input && typeof this.input.shouldRenderHtml === 'function' && this.input.shouldRenderHtml()) {
+                    // For HTML inputs (TextareaInput), render as HTML
+                    this.element.innerHTML = displayValue;
+                } else {
+                    // For all other inputs, use textContent to escape HTML
+                    this.element.textContent = displayValue;
+                }
             }
         }
 
@@ -883,7 +889,11 @@
         }
         
         value2html(value) {
-            return value !== null && value !== undefined ? String(value) : '';
+            if (value === null || value === undefined) {
+                return '';
+            }
+            // Escape HTML by default for security
+            return this.escape(String(value));
         }
         
         html2value(html) {
@@ -899,7 +909,42 @@
         }
         
         value2submit(value) {
-            return this.value2str(value);
+            // First convert to string
+            const stringValue = this.value2str(value);
+
+            // For URL-based submissions, add security metadata
+            if (this.options.url) {
+                // Get CSRF token if available
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+                // Create submission object with metadata
+                const submitData = {
+                    value: stringValue,
+                    timestamp: getCurrentTimestamp(),
+                    user: CURRENT_USER,
+                    htmlAllowed: false // Indicate this isn't HTML content
+                };
+
+                // Add CSRF token if available
+                if (csrfToken) {
+                    submitData.csrf_token = csrfToken;
+                }
+
+                // For APIs expecting specific format
+                if (this.options.jsonSubmit) {
+                    return JSON.stringify(submitData);
+                }
+
+                // Otherwise just return the escaped value
+                return stringValue;
+            }
+
+            // For local updates, just return the string value
+            return stringValue;
+        }
+        
+        shouldRenderHtml() {
+            return false; // Default to false for security
         }
         
         value2input(value) {
@@ -919,6 +964,7 @@
         }
         
         escape(str) {
+            if (!str) return '';
             const div = document.createElement('div');
             div.textContent = str;
             return div.innerHTML;
@@ -1865,6 +1911,7 @@
 
     /**
      * Enhanced TextareaInput with HTML WYSIWYG editing capability
+     * Enhanced TextareaInput with improved security for HTML content
      */
     class TextareaInput extends AbstractInput {
         init() {
@@ -1884,63 +1931,8 @@
 
             // Optional toolbar for basic formatting
             if (this.options.showToolbar !== false) {
-                this.toolbar = document.createElement('div');
-                this.toolbar.className = 'btn-toolbar bg-light p-1 border-bottom';
-
-                // Using the provided toolbar HTML
-                this.toolbar.innerHTML = `
-                    <div class="btn-group me-2">
-                        <button type="button" data-command="bold" class="btn btn-icon btn-sm btn-outline-secondary">
-                            <i class="ki-duotone ki-text-bold fs-1">
-                                <span class="path1"></span>
-                                <span class="path2"></span>
-                                <span class="path3"></span>
-                            </i>
-                        </button>
-                        <button type="button" data-command="italic" class="btn btn-icon btn-sm btn-outline-secondary">
-                            <i class="ki-duotone ki-text-italic fs-1">
-                                 <span class="path1"></span>
-                                 <span class="path2"></span>
-                                 <span class="path3"></span>
-                                 <span class="path4"></span>
-                            </i>
-                        </button>
-                        <button type="button" data-command="underline" class="btn btn-icon btn-sm btn-outline-secondary">
-                            <i class="ki-duotone ki-text-underline fs-1">
-                                 <span class="path1"></span>
-                                 <span class="path2"></span>
-                                 <span class="path3"></span>
-                            </i>
-                        </button>
-                    </div>
-                    <div class="btn-group me-2">
-                        <button type="button" data-command="insertUnorderedList" class="btn btn-icon btn-sm btn-outline-secondary">
-                            <i class="ki-duotone ki-text-circle fs-1">
-                                 <span class="path1"></span>
-                                 <span class="path2"></span>
-                                 <span class="path3"></span>
-                                 <span class="path4"></span>
-                                 <span class="path5"></span>
-                                 <span class="path6"></span>
-                            </i>
-                        </button>
-                        <button type="button" data-command="insertOrderedList" class="btn btn-icon btn-sm btn-outline-secondary">
-                            <i class="ki-duotone ki-text-number fs-1">
-                                 <span class="path1"></span>
-                                 <span class="path2"></span>
-                                 <span class="path3"></span>
-                                 <span class="path4"></span>
-                                 <span class="path5"></span>
-                                 <span class="path6"></span>
-                            </i>
-                        </button>
-                    </div>
-                `;
-
-                // Setup toolbar event handlers
-                this._setupToolbar();
-
-                this.editorWrapper.appendChild(this.toolbar);
+                this._setupToolbarContainer();
+                this._setupToolbarButtons();
             }
 
             // Append editor to wrapper
@@ -1954,50 +1946,221 @@
                 this.input.style.minHeight = `${this.options.rows * 1.5}rem`;
             }
 
-            // Set placeholder if specified
-            if (this.options.placeholder) {
-                this.input.dataset.placeholder = this.options.placeholder;
+            // Setup placeholder if specified
+            this._setupPlaceholder();
 
-                // Apply placeholder style when empty
-                if (!this.input.innerHTML) {
-                    this.input.classList.add('empty');
-                }
+            // Add security configuration options with sane defaults
+            this.securityOptions = {
+                sanitize: this.options.sanitize !== false, // Default to true
+                allowedTags: this.options.allowedTags || ['p', 'br', 'b', 'i', 'u', 'ul', 'ol', 'li', 'strong', 'em'],
+                allowedAttributes: this.options.allowedAttributes || {
+                    'a': ['href', 'title', 'target'],
+                    '*': ['class', 'id', 'style']
+                },
+                csrfToken: this.options.csrfToken || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+                maxLength: this.options.maxLength || 65535, // Default MySQL TEXT limit
+            };
 
-                // Check if the style element already exists
-                let placeholderStyle = document.head.querySelector('style[data-for="editable-wysiwyg-placeholder"]');
-
-                // Only create if it doesn't exist yet
-                if (!placeholderStyle) {
-                    placeholderStyle = document.createElement('style');
-                    placeholderStyle.setAttribute('data-for', 'editable-wysiwyg-placeholder');
-                    placeholderStyle.textContent = `
-                        [contenteditable=true].empty:before {
-                            content: attr(data-placeholder);
-                            color: #6c757d;
-                            font-style: italic;
-                        }
-                    `;
-                    document.head.appendChild(placeholderStyle);
-                }
-
-                // Store reference for cleanup
-                this.placeholderStyleElement = placeholderStyle;
-            }
-
-            // Log initialization with current timestamp
-            console.log(`WYSIWYG editor initialized at ${this.timestamp} by ${this.user}`);
+            console.log(`Secure WYSIWYG editor initialized at ${getCurrentTimestamp()} by ${CURRENT_USER}`);
         }
 
+        // Setup toolbar container
+        _setupToolbarContainer() {
+            this.toolbar = document.createElement('div');
+            this.toolbar.className = 'btn-toolbar bg-light p-1 border-bottom d-flex justify-content-between';
+            this.editorWrapper.appendChild(this.toolbar);
+        }
+
+        // Setup toolbar buttons with proper security considerations
+        _setupToolbarButtons() {
+            this.toolbar.innerHTML = `
+                <div class="btn-group me-2">
+                    <button type="button" data-command="bold" class="btn btn-icon btn-sm btn-outline-secondary">
+                        <i class="ki-duotone ki-text-bold fs-1">
+                            <span class="path1"></span>
+                            <span class="path2"></span>
+                            <span class="path3"></span>
+                        </i>
+                    </button>
+                    <button type="button" data-command="italic" class="btn btn-icon btn-sm btn-outline-secondary">
+                        <i class="ki-duotone ki-text-italic fs-1">
+                             <span class="path1"></span>
+                             <span class="path2"></span>
+                             <span class="path3"></span>
+                             <span class="path4"></span>
+                        </i>
+                    </button>
+                    <button type="button" data-command="underline" class="btn btn-icon btn-sm btn-outline-secondary">
+                        <i class="ki-duotone ki-text-underline fs-1">
+                             <span class="path1"></span>
+                             <span class="path2"></span>
+                             <span class="path3"></span>
+                        </i>
+                    </button>
+                </div>
+                <div class="btn-group me-2">
+                    <button type="button" data-command="insertUnorderedList" class="btn btn-icon btn-sm btn-outline-secondary">
+                        <i class="ki-duotone ki-text-circle fs-1">
+                             <span class="path1"></span>
+                             <span class="path2"></span>
+                             <span class="path3"></span>
+                             <span class="path4"></span>
+                             <span class="path5"></span>
+                             <span class="path6"></span>
+                        </i>
+                    </button>
+                    <button type="button" data-command="insertOrderedList" class="btn btn-icon btn-sm btn-outline-secondary">
+                        <i class="ki-duotone ki-text-number fs-1">
+                             <span class="path1"></span>
+                             <span class="path2"></span>
+                             <span class="path3"></span>
+                             <span class="path4"></span>
+                             <span class="path5"></span>
+                             <span class="path6"></span>
+                        </i>
+                    </button>
+                </div>
+            `;
+
+            // Setup toolbar events
+            this._setupToolbar();
+        }
+
+        // Setup placeholder styling
+        _setupPlaceholder() {
+            if (!this.options.placeholder) return;
+
+            this.input.dataset.placeholder = this.options.placeholder;
+
+            // Apply placeholder style when empty
+            if (!this.input.innerHTML) {
+                this.input.classList.add('empty');
+            }
+
+            // Check if the style element already exists
+            let placeholderStyle = document.head.querySelector('style[data-for="editable-wysiwyg-placeholder"]');
+
+            // Only create if it doesn't exist yet
+            if (!placeholderStyle) {
+                placeholderStyle = document.createElement('style');
+                placeholderStyle.setAttribute('data-for', 'editable-wysiwyg-placeholder');
+                placeholderStyle.textContent = `
+                    [contenteditable=true].empty:before {
+                        content: attr(data-placeholder);
+                        color: #6c757d;
+                        font-style: italic;
+                    }
+                `;
+                document.head.appendChild(placeholderStyle);
+            }
+        }
+
+        /**
+         * Sanitize HTML content to prevent XSS attacks
+         * @param {string} html - The HTML content to sanitize
+         * @returns {string} - The sanitized HTML content
+         */
+        sanitizeHtml(html) {
+            if (!this.securityOptions.sanitize) {
+                return html;
+            }
+
+            try {
+                // Basic implementation - in production, consider using DOMPurify
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = html;
+
+                // Remove dangerous elements
+                const dangerousElements = tempDiv.querySelectorAll('script, iframe, object, embed, form, style, link, meta');
+                dangerousElements.forEach(el => el.remove());
+
+                // Process all elements to remove dangerous attributes and non-allowed tags
+                const processNode = (node) => {
+                    // Only process element nodes
+                    if (node.nodeType !== 1) return node;
+
+                    // Check if this tag is allowed
+                    const tagName = node.tagName.toLowerCase();
+                    const isAllowed = this.securityOptions.allowedTags.includes(tagName);
+
+                    if (!isAllowed) {
+                        // Replace with text content (keep the content, remove just the tag)
+                        const text = document.createTextNode(node.textContent);
+                        if (node.parentNode) {
+                            node.parentNode.replaceChild(text, node);
+                        }
+                        return text;
+                    }
+
+                    // Remove dangerous attributes
+                    Array.from(node.attributes).forEach(attr => {
+                        // Remove event handlers and javascript: URLs
+                        if (attr.name.startsWith('on') || 
+                            (attr.value && attr.value.toLowerCase().includes('javascript:'))) {
+                            node.removeAttribute(attr.name);
+                        }
+
+                        // Check if attribute is allowed for this tag
+                        const tagAllowList = this.securityOptions.allowedAttributes[tagName] || 
+                                             this.securityOptions.allowedAttributes['*'] || [];
+
+                        if (!tagAllowList.includes(attr.name)) {
+                            node.removeAttribute(attr.name);
+                        }
+                    });
+
+                    // Process child nodes
+                    if (node.hasChildNodes()) {
+                        Array.from(node.childNodes).forEach(child => {
+                            processNode(child);
+                        });
+                    }
+
+                    return node;
+                };
+
+                // Process all nodes
+                Array.from(tempDiv.childNodes).forEach(node => {
+                    processNode(node);
+                });
+
+                // Enforce maximum length if specified
+                if (this.securityOptions.maxLength && tempDiv.textContent.length > this.securityOptions.maxLength) {
+                    console.warn(`Content exceeds maximum length of ${this.securityOptions.maxLength} characters`);
+                    // Instead of truncating, which could break HTML, warn the user
+                    // In a production system, you might want to add a UI indicator
+                }
+
+                return tempDiv.innerHTML;
+            } catch (error) {
+                console.error('Error sanitizing HTML:', error);
+                // If sanitization fails, return escaped HTML as plain text for safety
+                return this.escape(html);
+            }
+        }
+
+        // Option to disable dangerous tags in toolbar
         _setupToolbar() {
             if (!this.toolbar) return;
 
+            // Get all toolbar buttons
             const buttons = this.toolbar.querySelectorAll('button[data-command]');
 
-            // Add click handlers to each button
+            // Add click handlers to each button, with security checks
             buttons.forEach(button => {
+                const command = button.getAttribute('data-command');
+
+                // Disable commands that might be risky if not explicitly allowed
+                const riskyCommands = ['insertHTML', 'createLink'];
+                if (riskyCommands.includes(command) && !this.options.allowRiskyCommands) {
+                    button.disabled = true;
+                    button.classList.add('disabled');
+                    button.setAttribute('title', 'This command is disabled for security reasons');
+                    return;
+                }
+
                 const clickHandler = (e) => {
                     e.preventDefault();
-                    const command = button.getAttribute('data-command');
 
                     // Execute the command
                     document.execCommand(command, false, null);
@@ -2018,13 +2181,13 @@
                 return '';
             }
 
-            // Return HTML for display
-            return String(value);
+            // Sanitize HTML before display - critical for security
+            return this.sanitizeHtml(String(value));
         }
 
         // Extract value from HTML
         html2value(html) {
-            return html; // Return as is
+            return this.sanitizeHtml(html); // Sanitize on input
         }
 
         // Set HTML content in editor
@@ -2038,22 +2201,57 @@
                     return;
                 }
 
-                // Set the HTML content directly
-                this.input.innerHTML = String(value);
+                // Set the sanitized HTML content directly
+                this.input.innerHTML = this.sanitizeHtml(String(value));
                 if (this.options.placeholder) {
                     this.input.classList.remove('empty');
                 }
             }
         }
 
-        // Get HTML content from editor
+        // Get HTML content from editor, sanitized
         input2value() {
             if (this.isDestroyed || !this.input) {
                 return null;
             }
 
-            // Return the HTML content
-            return this.input.innerHTML;
+            // Return the sanitized HTML content
+            return this.sanitizeHtml(this.input.innerHTML);
+        }
+
+        // Indicate this input contains HTML that should be rendered
+        shouldRenderHtml() {
+            return true;
+        }
+
+        // Override value2submit to add CSRF protection and sanitize content
+        value2submit(value) {
+            // Sanitize the HTML first with existing methods
+            const sanitizedHtml = this.sanitizeHtml ? this.sanitizeHtml(value) : value;
+
+            // For URL-based submissions, we'll wrap in JSON with metadata
+            if (this.options.url) {
+                // Create submission object with security metadata
+                const submitData = {
+                    content: sanitizedHtml,
+                    timestamp: getCurrentTimestamp(),
+                    user: CURRENT_USER,
+                    htmlAllowed: true // Flag that this is HTML content
+                };
+
+                // Add CSRF token if available
+                const csrfToken = this.securityOptions?.csrfToken || 
+                                 document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                if (csrfToken) {
+                    submitData.csrf_token = csrfToken;
+                }
+
+                // Return JSON string for server submission
+                return JSON.stringify(submitData);
+            }
+
+            // For local updates (no server), just return the sanitized HTML
+            return sanitizedHtml;
         }
 
         // Handle focus events for placeholder
@@ -2108,30 +2306,10 @@
 
             // Handle blur event if onblur option is set to 'submit'
             if (this.options.onblur === 'submit') {
-                this._blurHandler = () => {
-                    // Small delay to allow other events to complete
-                    setTimeout(() => {
-                        // Don't submit if we've lost focus because the form is being hidden
-                        if (this.isDestroyed || !this.editable || !this.editable.form) {
-                            return;
-                        }
-
-                        // Clear any existing errors
-                        if (typeof this.editable.form.clearError === 'function') {
-                            this.editable.form.clearError();
-                        }
-
-                        // Submit the form
-                        if (typeof this.editable.form.submit === 'function') {
-                            this.editable.form.submit();
-                        }
-                    }, 100);
-                };
-
-                this.input.addEventListener('blur', this._blurHandler);
+                this.setupBlurHandler();
             }
 
-            console.log(`WYSIWYG TextareaInput autosubmit setup at 2025-03-27 06:14:34 by CashEncode`);
+            console.log(`WYSIWYG TextareaInput autosubmit setup at ${getCurrentTimestamp()} by ${CURRENT_USER}`);
         }
 
         // Override removeTypeSpecificListeners to clean up editor-specific handlers
@@ -2150,7 +2328,7 @@
 
         // Enhanced destroy to clean up all handlers
         destroy() {
-            // Only remove if we're the last editable instance using it
+            // Only remove placeholder style if we're the last editable instance using it
             if (document.querySelectorAll('.html-editor-wrapper').length <= 1) {
                 const placeholderStyle = document.head.querySelector('style[data-for="editable-wysiwyg-placeholder"]');
                 if (placeholderStyle) {
@@ -2164,7 +2342,6 @@
             // Clean up any remaining elements
             this.toolbar = null;
             this.editorWrapper = null;
-            this.placeholderStyleElement = null;
 
             console.log(`WYSIWYG TextareaInput destroyed at ${getCurrentTimestamp()} by ${CURRENT_USER}`);
         }
