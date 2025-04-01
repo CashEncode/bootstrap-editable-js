@@ -11,7 +11,7 @@ if (!isset($_SESSION['csrf_token'])) {
 $current_timestamp = "2025-04-01 06:30:13";
 $current_user = "CashEncode";
 
-$pk = 1;
+$pk1 = 1;
 $pk2 = 2;
 $pk3 = 3;
 ?>
@@ -124,7 +124,7 @@ $pk3 = 3;
                                id="username" 
                                data-editable="true" 
                                data-type="text" 
-                               data-pk="<?= $pk; ?>" 
+                               data-pk="<?= $pk1; ?>" 
                                data-name="username" 
                                data-url="response.php" 
                                data-title="Enter username">
@@ -142,7 +142,7 @@ $pk3 = 3;
                                id="status" 
                                data-editable="true" 
                                data-type="text" 
-                               data-pk="<?= $pk; ?>" 
+                               data-pk="<?= $pk1; ?>" 
                                data-name="status" 
                                data-url="response.php" 
                                data-mode="inline">
@@ -160,7 +160,7 @@ $pk3 = 3;
                                id="email" 
                                data-editable="true" 
                                data-type="email" 
-                               data-pk="<?= $pk; ?>" 
+                               data-pk="<?= $pk1; ?>" 
                                data-name="u_email" 
                                data-url="response.php" 
                                data-title="Enter email">
@@ -172,7 +172,7 @@ $pk3 = 3;
                     
                     <div class="code-block">data-editable="true"
 data-type="text|email"
-data-pk="<?= $pk; ?>"
+data-pk="<?= $pk1; ?>"
 data-name="fieldname"
 data-url="response.php"
 data-mode="popup|inline" // optional</div>
@@ -192,7 +192,7 @@ data-mode="popup|inline" // optional</div>
                         id="html-content" 
                         data-editable="true" 
                         data-type="textarea" 
-                        data-pk="<?= $pk; ?>" 
+                        data-pk="<?= $pk1; ?>" 
                         data-name="html_content" 
                         data-url="response.php" 
                         data-title="Edit content" 
@@ -229,7 +229,7 @@ data-showtoolbar="true"</div>
                                id="country" 
                                data-editable="true" 
                                data-type="select" 
-                               data-pk="<?= $pk; ?>" 
+                               data-pk="<?= $pk1; ?>" 
                                data-name="country" 
                                data-url="response.php" 
                                data-title="Select country"
@@ -248,7 +248,7 @@ data-showtoolbar="true"</div>
                                id="languages" 
                                data-editable="true" 
                                data-type="checklist" 
-                               data-pk="<?= $pk; ?>" 
+                               data-pk="<?= $pk1; ?>" 
                                data-name="languages" 
                                data-url="response.php" 
                                data-title="Select languages"
@@ -288,7 +288,7 @@ data-value='["val1","val2"]'</div>
                                id="birthdate" 
                                data-editable="true" 
                                data-type="date" 
-                               data-pk="<?= $pk; ?>" 
+                               data-pk="<?= $pk1; ?>" 
                                data-name="birthdate" 
                                data-url="response.php" 
                                data-title="Enter birthdate">
@@ -305,7 +305,7 @@ data-value='["val1","val2"]'</div>
                                id="meeting" 
                                data-editable="true" 
                                data-type="datetime-local" 
-                               data-pk="<?= $pk; ?>" 
+                               data-pk="<?= $pk1; ?>" 
                                data-name="meeting" 
                                data-url="response.php" 
                                data-title="Set meeting time">
