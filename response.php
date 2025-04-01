@@ -150,7 +150,7 @@ if ($isHtmlContent) {
     }
 } else {
     // Regular (non-HTML) content - escape HTML entities
-z    $processedValue = trim(htmlspecialchars($value, ENT_QUOTES, 'UTF-8'));
+    $processedValue = trim(htmlspecialchars($value, ENT_QUOTES, 'UTF-8'));
 }
 
 // Field-specific validations (email, etc.)
