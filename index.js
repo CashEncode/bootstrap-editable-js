@@ -64,18 +64,26 @@
             // Store element
             this.element = element;
 
-            // Merge default options with provided options
+            // STEP 1: Start with default options
+            this.options = { ...defaults };
+
+            // STEP 2: Apply JavaScript options
             this.options = {
-                ...defaults,
+                ...this.options,
                 ...options
             };
 
-            // If no value provided in options, extract it from the element content
+            // STEP 3: Extract and prioritize data attributes (will override JS options)
+            if (element) {
+                this._extractDataAttributes();
+            }
+
+            // If no value provided in options or data attributes, extract from element content
             if (this.options.value === null && element) {
                 this.options.value = element.innerHTML || '';
             }
 
-            // Store current date and user for logging
+            // Store timestamp and user for logging
             this.options.timestamp = getCurrentTimestamp();
             this.options.user = CURRENT_USER;
 
@@ -97,6 +105,135 @@
             this._setupClickHandler();
 
             console.log(`Editable initialized at ${getCurrentTimestamp()} by ${CURRENT_USER}`);
+        }
+        
+        _extractDataAttributes() {
+            if (!this.element || !this.element.dataset) return;
+
+            const dataset = this.element.dataset;
+
+            // ---------------------------------------------
+            // 1. Handle simple string attributes
+            // ---------------------------------------------
+            const stringAttributes = [
+                'type', 'name', 'pk', 'url', 'title', 'placement', 'mode', 
+                'emptytext', 'placeholder', 'onblur'
+            ];
+
+            stringAttributes.forEach(attr => {
+                if (dataset[attr] !== undefined) {
+                    this.options[attr] = dataset[attr];
+                }
+            });
+
+            // ---------------------------------------------
+            // 2. Handle boolean attributes
+            // ---------------------------------------------
+            const booleanAttributes = [
+                'autosubmit', 'savenochange', 'enableEscape', 'trim',
+                'cleanupOnSave', 'cleanupOnCancel', 'cleanupOnHide', 
+                'removeContainerOnCleanup'
+            ];
+
+            booleanAttributes.forEach(attr => {
+                if (dataset[attr] !== undefined) {
+                    // Convert string 'true'/'false' to actual boolean
+                    this.options[attr] = (
+                        dataset[attr] === true || 
+                        dataset[attr] === 'true' || 
+                        dataset[attr] === '1' || 
+                        dataset[attr] === ''
+                    );
+                }
+            });
+
+            // Handle special case of showbuttons which can be true/false/bottom
+            if (dataset.showbuttons !== undefined) {
+                if (dataset.showbuttons === 'true' || dataset.showbuttons === '1' || dataset.showbuttons === '') {
+                    this.options.showbuttons = true;
+                } else if (dataset.showbuttons === 'false' || dataset.showbuttons === '0') {
+                    this.options.showbuttons = false;
+                } else {
+                    this.options.showbuttons = dataset.showbuttons; // For 'bottom', 'top', etc.
+                }
+            }
+
+            // ---------------------------------------------
+            // 3. Handle numeric attributes
+            // ---------------------------------------------
+            const numericAttributes = ['min', 'max', 'step', 'rows', 'maxLength'];
+
+            numericAttributes.forEach(attr => {
+                if (dataset[attr] !== undefined) {
+                    this.options[attr] = Number(dataset[attr]);
+                }
+            });
+
+            // ---------------------------------------------
+            // 4. Handle JSON attributes
+            // ---------------------------------------------
+            const jsonAttributes = ['source', 'params', 'value', 'defaultValue', 'allowedTags'];
+
+            jsonAttributes.forEach(attr => {
+                if (dataset[attr]) {
+                    try {
+                        this.options[attr] = JSON.parse(dataset[attr]);
+                    } catch (e) {
+                        console.warn(`[Editable] Could not parse JSON for data-${attr}:`, e);
+                        // Keep as string if can't parse (might be a simple value)
+                        this.options[attr] = dataset[attr];
+                    }
+                }
+            });
+
+            // ---------------------------------------------
+            // 5. Handle special function attributes
+            // ---------------------------------------------
+            // For function attributes, only override if not already a function
+            // and try to create one from string if possible
+            if (dataset.validate && typeof this.options.validate !== 'function') {
+                // Try to get the function by name if it exists in the global scope
+                if (typeof window[dataset.validate] === 'function') {
+                    this.options.validate = window[dataset.validate];
+                } else {
+                    console.warn(`[Editable] Could not find validate function: ${dataset.validate}`);
+                }
+            }
+
+            // Same for success and error callbacks
+            ['success', 'error'].forEach(callbackName => {
+                if (dataset[callbackName] && typeof this.options[callbackName] !== 'function') {
+                    if (typeof window[dataset[callbackName]] === 'function') {
+                        this.options[callbackName] = window[dataset[callbackName]];
+                    }
+                }
+            });
+
+            // ---------------------------------------------
+            // 6. Handle special showtoolbar attribute for textarea
+            // ---------------------------------------------
+            if (dataset.showtoolbar !== undefined) {
+                this.options.showToolbar = (
+                    dataset.showtoolbar === true || 
+                    dataset.showtoolbar === 'true' || 
+                    dataset.showtoolbar === '1' || 
+                    dataset.showtoolbar === ''
+                );
+            }
+
+            // ---------------------------------------------
+            // 7. Handle ajaxOptions if specified
+            // ---------------------------------------------
+            if (dataset.ajaxoptions) {
+                try {
+                    this.options.ajaxOptions = JSON.parse(dataset.ajaxoptions);
+                } catch (e) {
+                    console.warn('[Editable] Could not parse ajaxOptions:', e);
+                }
+            }
+
+            // Log what we found
+            console.log(`[Editable] Data attributes extracted at ${getCurrentTimestamp()}`);
         }
 
         _setupClickHandler() {
@@ -3834,7 +3971,7 @@
     // Initialize editable on an element
     function editable(selector, options = {}) {
         let elements;
-        
+
         try {
             if (typeof selector === 'string') {
                 elements = document.querySelectorAll(selector);
@@ -3845,24 +3982,25 @@
             } else {
                 throw new Error('Invalid selector');
             }
-            
+
             const instances = [];
-            
+
             elements.forEach(element => {
                 // If element already has editable instance, destroy it
                 if (element.editable && typeof element.editable.destroy === 'function') {
                     element.editable.destroy();
                 }
-                
+
                 // Create new editable instance
                 try {
+                    // Data attributes will take precedence during initialization
                     const instance = new Editable(element, options);
                     instances.push(instance);
                 } catch (e) {
                     console.error(`Error creating editable instance for element:`, element, e);
                 }
             });
-            
+
             return instances.length === 1 ? instances[0] : instances;
         } catch (e) {
             console.error('Error initializing editable:', e);
