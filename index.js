@@ -31,8 +31,10 @@
         // Cleanup options
         cleanupOnSave: true,    // Clean up DOM elements after successful save
         cleanupOnCancel: true,  // Clean up DOM elements after cancel
-        cleanupOnHide: false,    // Clean up container on hide (careful with this one)
+        cleanupOnHide: false,   // Clean up container on hide (careful with this one)
         removeContainerOnCleanup: true,  // Whether to completely remove container from DOM on cleanup
+        trim: true,             // Whether to trim whitespace from all inputs
+        trimHTML: true,        // Whether to trim whitespace from HTML content
     };
     
     /**
@@ -905,6 +907,9 @@
         }
         
         str2value(str) {
+            if (typeof str === 'string') {
+                return str.trim();
+            }
             return str;
         }
         
@@ -954,7 +959,25 @@
         }
         
         input2value() {
-            return !this.isDestroyed && this.input ? this.input.value : null;
+            if (this.isDestroyed || !this.input) {
+                return null;
+            }
+
+            // Get raw value
+            let value = this.input.value;
+
+            // Special handling for contentEditable (TextareaInput)
+            if (this.input.contentEditable === 'true') {
+                value = this.input.innerHTML;
+                return value; // Don't trim HTML content
+            }
+
+            // For non-HTML inputs, trim if it's a string
+            if (typeof value === 'string') {
+                value = value.trim();
+            }
+
+            return value;
         }
         
         clear() {
@@ -2215,8 +2238,29 @@
                 return null;
             }
 
-            // Return the sanitized HTML content
-            return this.sanitizeHtml(this.input.innerHTML);
+            // Get the HTML content
+            const html = this.input.innerHTML;
+
+            // Don't trim HTML directly, but trim text content if enabled
+            if (this.options.trimText) {
+                // Create a temporary div to extract and trim text content
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = html;
+
+                // Only trim text nodes
+                Array.from(tempDiv.childNodes).forEach(node => {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        const trimmed = node.textContent.trim();
+                        if (trimmed !== node.textContent) {
+                            node.textContent = trimmed;
+                        }
+                    }
+                });
+
+                return tempDiv.innerHTML;
+            }
+
+            return html;
         }
 
         // Indicate this input contains HTML that should be rendered
@@ -2675,9 +2719,12 @@
 
             try {
                 // Collect checked values
-                return this.inputs
+                const values = this.inputs
                     .filter(input => input.checked)
                     .map(input => input.value);
+
+                // Trim each value in the array if it's a string
+                return values.map(val => typeof val === 'string' ? val.trim() : val);
             } catch (e) {
                 console.debug('Error getting checklist value:', e);
                 return [];
